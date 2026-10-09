@@ -1,0 +1,492 @@
+// ==============================================================================
+// BOTICA NOVA SALUD - SCHEMA PRISMA COMPLETO
+// Base de datos: Supabase (PostgreSQL 15)
+// ==============================================================================
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+// ------------------------------------------------------------------------------
+// ENUMS DEL DOMINIO FARMACÉUTICO Y DE SISTEMA
+// ------------------------------------------------------------------------------
+
+enum PresentationType {
+  UNIDAD
+  BLISTER
+  CAJA
+  FRASCO
+  SOBRE
+  AMPOLLA
+  TUBO
+  GOTERO
+}
+
+enum BatchStatus {
+  VIGENTE
+  PROXIMO_VENCER
+  VENCIDO
+  AGOTADO
+  BLOQUEADO_SANITARIO
+}
+
+enum MovementType {
+  ENTRADA_COMPRA
+  SALIDA_VENTA
+  AJUSTE_POSITIVO
+  AJUSTE_NEGATIVO
+  MERMA_VENCIMIENTO
+  DEVOLUCION_CLIENTE
+  DEVOLUCION_PROVEEDOR
+}
+
+enum DocType {
+  DNI
+  CE
+  RUC
+  PASAPORTE
+}
+
+enum PaymentMethod {
+  EFECTIVO
+  TARJETA
+  YAPE
+  PLIN
+  TRANSFERENCIA
+  MIXTO
+}
+
+enum SaleStatus {
+  COMPLETADA
+  ANULADA
+}
+
+enum PurchaseStatus {
+  REGISTRADA
+  RECIBIDA
+  ANULADA
+}
+
+enum AlertType {
+  STOCK_BAJO
+  STOCK_AGOTADO
+  VENCIMIENTO_30_DIAS
+  VENCIMIENTO_60_DIAS
+  VENCIMIENTO_90_DIAS
+  MEDICAMENTO_VENCIDO
+}
+
+enum AlertStatus {
+  PENDIENTE
+  EN_GESTION
+  ATENDIDA
+  DESCARTADA
+}
+
+enum AlertTriggerSource {
+  CRON_JOB
+  REALTIME_SALE
+  MANUAL
+}
+
+// ------------------------------------------------------------------------------
+// 1. SEGURIDAD, USUARIOS Y MATRIZ RBAC DINÁMICA
+// ------------------------------------------------------------------------------
+
+model UserProfile {
+  id                  String   @id @db.Uuid // Corresponde al auth.users.id de Supabase
+  dni                 String   @unique @db.VarChar(12)
+  firstName           String   @map("first_name") @db.VarChar(100)
+  lastName            String   @map("last_name") @db.VarChar(100)
+  email               String   @unique @db.VarChar(255)
+  phone               String?  @db.VarChar(20)
+  roleTitle           String   @default("Cajero") @map("role_title") @db.VarChar(50) // Cajero, Almacenero, Supervisor, Administrador
+  isRootAdmin         Boolean  @default(false) @map("is_root_admin") // Administrador único inmutable
+  isActive            Boolean  @default(true) @map("is_active")
+  mustChangePassword  Boolean  @default(true) @map("must_change_password")
+  lastLoginAt         DateTime? @map("last_login_at")
+  lastLoginIp         String?  @map("last_login_ip") @db.VarChar(45)
+  createdAt           DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt           DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  // Relaciones
+  permissions         UserPermission[]
+  grantedPermissions  UserPermission[] @relation("GrantedByAdmin")
+  sales               Sale[]           @relation("CashierSales")
+  cancelledSales      Sale[]           @relation("CancelledSales")
+  stockMovements      StockMovement[]
+  purchases           Purchase[]
+  resolvedAlerts      StockAlert[]     @relation("ResolvedAlerts")
+  auditLogs           SystemAuditLog[]
+
+  @@map("users_profile")
+}
+
+model Module {
+  id          String   @id @db.VarChar(50) // 'auth_rbac', 'inventory', 'pos_sales', etc.
+  name        String   @db.VarChar(100)
+  description String?  @db.Text
+  icon        String?  @db.VarChar(50)
+  sortOrder   Int      @default(0) @map("sort_order")
+  isActive    Boolean  @default(true) @map("is_active")
+
+  // Relaciones
+  userPermissions UserPermission[]
+
+  @@map("modules")
+}
+
+model UserPermission {
+  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId     String   @map("user_id") @db.Uuid
+  moduleId   String   @map("module_id") @db.VarChar(50)
+  canView    Boolean  @default(false) @map("can_view")
+  canCreate  Boolean  @default(false) @map("can_create")
+  canEdit    Boolean  @default(false) @map("can_edit")
+  canDelete  Boolean  @default(false) @map("can_delete")
+  grantedById String? @map("granted_by_id") @db.Uuid
+  updatedAt  DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  // Relaciones
+  user       UserProfile  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  module     Module       @relation(fields: [moduleId], references: [id], onDelete: Restrict)
+  grantedBy  UserProfile? @relation("GrantedByAdmin", fields: [grantedById], references: [id], onDelete: SetNull)
+
+  @@unique([userId, moduleId])
+  @@map("user_permissions")
+}
+
+// ------------------------------------------------------------------------------
+// 2. CATÁLOGO FARMACÉUTICO, CATEGORÍAS Y LABORATORIOS
+// ------------------------------------------------------------------------------
+
+model Category {
+  id          String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name        String    @unique @db.VarChar(100)
+  slug        String    @unique @db.VarChar(100)
+  description String?   @db.Text
+  isActive    Boolean   @default(true) @map("is_active")
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  // Relaciones
+  products    Product[]
+
+  @@map("categories")
+}
+
+model Laboratory {
+  id          String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name        String    @unique @db.VarChar(150)
+  country     String?   @db.VarChar(100)
+  isActive    Boolean   @default(true) @map("is_active")
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  // Relaciones
+  products    Product[]
+
+  @@map("laboratories")
+}
+
+model Supplier {
+  id           String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  ruc          String    @unique @db.VarChar(11) // RUC en Perú tiene 11 dígitos
+  businessName String    @map("business_name") @db.VarChar(200)
+  contactName  String?   @map("contact_name") @db.VarChar(150)
+  phone        String?   @db.VarChar(30)
+  email        String?   @db.VarChar(150)
+  address      String?   @db.Text
+  isActive     Boolean   @default(true) @map("is_active")
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt    DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  // Relaciones
+  batches      Batch[]
+  purchases    Purchase[]
+  replenishmentSuggestions ReplenishmentSuggestion[]
+
+  @@map("suppliers")
+}
+
+model Product {
+  id                    String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  barcode               String            @unique @db.VarChar(50) // EAN-13 o interno
+  name                  String            @db.VarChar(200)
+  genericName           String            @map("generic_name") @db.VarChar(200) // Principio Activo DCI
+  brandName             String?           @map("brand_name") @db.VarChar(150)
+  concentration         String?           @db.VarChar(100) // ej: "500 mg", "10 mg/ml"
+  presentation          PresentationType  @default(UNIDAD)
+  sanitaryRegistration String?           @map("sanitary_registration") @db.VarChar(100) // Reg. DIGEMID
+  categoryId            String            @map("category_id") @db.Uuid
+  laboratoryId          String?           @map("laboratory_id") @db.Uuid
+  salePrice             Decimal           @map("sale_price") @db.Decimal(10, 2)
+  costPrice             Decimal           @map("cost_price") @db.Decimal(10, 2)
+  minStock              Int               @default(10) @map("min_stock")
+  maxStock              Int?              @map("max_stock")
+  requiresPrescription  Boolean           @default(false) @map("requires_prescription") // Receta médica obligatoria
+  isControlled          Boolean           @default(false) @map("is_controlled") // Estupefaciente / Psicotrópico
+  imageUrl              String?           @map("image_url") @db.Text
+  isActive              Boolean           @default(true) @map("is_active")
+  createdAt             DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt             DateTime          @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  // Relaciones
+  category              Category          @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  laboratory            Laboratory?       @relation(fields: [laboratoryId], references: [id], onDelete: SetNull)
+  batches               Batch[]
+  stockMovements        StockMovement[]
+  saleItems             SaleItem[]
+  purchaseItems         PurchaseItem[]
+  alerts                StockAlert[]
+  replenishmentSuggestions ReplenishmentSuggestion[]
+
+  @@index([genericName], name: "idx_products_generic_name")
+  @@index([barcode], name: "idx_products_barcode")
+  @@map("products")
+}
+
+// ------------------------------------------------------------------------------
+// 3. LOTES, VENCIMIENTO Y CONTROL FEFO
+// ------------------------------------------------------------------------------
+
+model Batch {
+  id              String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  productId       String       @map("product_id") @db.Uuid
+  batchCode       String       @map("batch_code") @db.VarChar(100)
+  expirationDate  DateTime     @map("expiration_date") @db.Date
+  currentStock    Int          @default(0) @map("current_stock")
+  initialStock    Int          @map("initial_stock")
+  supplierId      String?      @map("supplier_id") @db.Uuid
+  status          BatchStatus  @default(VIGENTE)
+  createdAt       DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime     @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  // Relaciones
+  product         Product      @relation(fields: [productId], references: [id], onDelete: Restrict)
+  supplier        Supplier?    @relation(fields: [supplierId], references: [id], onDelete: SetNull)
+  stockMovements  StockMovement[]
+  saleItemBatches SaleItemBatch[]
+  alerts          StockAlert[]
+
+  @@unique([productId, batchCode])
+  @@index([productId, expirationDate], name: "idx_batches_fefo_order")
+  @@map("batches")
+}
+
+model StockMovement {
+  id              String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  productId       String        @map("product_id") @db.Uuid
+  batchId         String?       @map("batch_id") @db.Uuid
+  userId          String        @map("user_id") @db.Uuid
+  movementType    MovementType  @map("movement_type")
+  quantity        Int
+  previousStock   Int           @map("previous_stock")
+  newStock        Int           @map("new_stock")
+  reason          String        @db.Text
+  referenceId     String?       @map("reference_id") @db.Uuid // sale_id o purchase_id
+  createdAt       DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  // Relaciones
+  product         Product       @relation(fields: [productId], references: [id], onDelete: Restrict)
+  batch           Batch?        @relation(fields: [batchId], references: [id], onDelete: SetNull)
+  user            UserProfile   @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  @@index([productId, createdAt], name: "idx_stock_movements_history")
+  @@map("stock_movements")
+}
+
+// ------------------------------------------------------------------------------
+// 4. CLIENTES Y VENTAS (PUNTO DE VENTA POS)
+// ------------------------------------------------------------------------------
+
+model Customer {
+  id          String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  docType     DocType   @default(DNI) @map("doc_type")
+  docNumber   String    @unique @map("doc_number") @db.VarChar(20)
+  fullName    String    @map("full_name") @db.VarChar(200)
+  phone       String?   @db.VarChar(30)
+  email       String?   @db.VarChar(150)
+  address     String?   @db.Text
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  // Relaciones
+  sales       Sale[]
+
+  @@index([docNumber], name: "idx_customers_doc_number")
+  @@map("customers")
+}
+
+model Sale {
+  id              String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  saleCode        String         @unique @map("sale_code") @db.VarChar(50) // ej: BOL-B001-00004523
+  cashierId       String         @map("cashier_id") @db.Uuid
+  customerId      String?        @map("customer_id") @db.Uuid
+  status          SaleStatus     @default(COMPLETADA)
+  paymentMethod   PaymentMethod  @default(EFECTIVO) @map("payment_method")
+  subtotal        Decimal        @db.Decimal(10, 2)
+  taxAmount       Decimal        @default(0.00) @map("tax_amount") @db.Decimal(10, 2) // IGV 18%
+  discountAmount  Decimal        @default(0.00) @map("discount_amount") @db.Decimal(10, 2)
+  totalAmount     Decimal        @map("total_amount") @db.Decimal(10, 2)
+  cashGiven       Decimal?       @map("cash_given") @db.Decimal(10, 2)
+  cashChange      Decimal?       @map("cash_change") @db.Decimal(10, 2)
+  cancelledById   String?        @map("cancelled_by_id") @db.Uuid
+  cancelReason    String?        @map("cancel_reason") @db.Text
+  cancelledAt     DateTime?      @map("cancelled_at") @db.Timestamptz(6)
+  createdAt       DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  // Relaciones
+  cashier         UserProfile    @relation("CashierSales", fields: [cashierId], references: [id], onDelete: Restrict)
+  customer        Customer?      @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  cancelledBy     UserProfile?   @relation("CancelledSales", fields: [cancelledById], references: [id], onDelete: SetNull)
+  items           SaleItem[]
+
+  @@index([createdAt], name: "idx_sales_created_at")
+  @@map("sales")
+}
+
+model SaleItem {
+  id          String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  saleId      String     @map("sale_id") @db.Uuid
+  productId   String     @map("product_id") @db.Uuid
+  unitPrice   Decimal    @map("unit_price") @db.Decimal(10, 2)
+  quantity    Int
+  discount    Decimal    @default(0.00) @db.Decimal(10, 2)
+  subtotal    Decimal    @db.Decimal(10, 2)
+
+  // Relaciones
+  sale        Sale       @relation(fields: [saleId], references: [id], onDelete: Cascade)
+  product     Product    @relation(fields: [productId], references: [id], onDelete: Restrict)
+  batchSplits SaleItemBatch[]
+
+  @@map("sale_items")
+}
+
+model SaleItemBatch {
+  id          String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  saleItemId  String    @map("sale_item_id") @db.Uuid
+  batchId     String    @map("batch_id") @db.Uuid
+  quantity    Int
+
+  // Relaciones
+  saleItem    SaleItem  @relation(fields: [saleItemId], references: [id], onDelete: Cascade)
+  batch       Batch     @relation(fields: [batchId], references: [id], onDelete: Restrict)
+
+  @@index([batchId], name: "idx_sale_item_batches_batch")
+  @@map("sale_item_batches")
+}
+
+// ------------------------------------------------------------------------------
+// 5. COMPRAS Y ÓRDENES DE REPOSICIÓN
+// ------------------------------------------------------------------------------
+
+model Purchase {
+  id            String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  purchaseCode  String          @unique @map("purchase_code") @db.VarChar(50) // ej: OC-2026-00084
+  supplierId    String          @map("supplier_id") @db.Uuid
+  buyerId       String          @map("buyer_id") @db.Uuid
+  invoiceNumber String?         @map("invoice_number") @db.VarChar(50)
+  invoiceDate   DateTime?       @map("invoice_date") @db.Date
+  status        PurchaseStatus  @default(REGISTRADA)
+  totalAmount   Decimal         @map("total_amount") @db.Decimal(10, 2)
+  notes         String?         @db.Text
+  createdAt     DateTime        @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime        @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  // Relaciones
+  supplier      Supplier        @relation(fields: [supplierId], references: [id], onDelete: Restrict)
+  buyer         UserProfile     @relation(fields: [buyerId], references: [id], onDelete: Restrict)
+  items         PurchaseItem[]
+
+  @@map("purchases")
+}
+
+model PurchaseItem {
+  id               String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  purchaseId       String    @map("purchase_id") @db.Uuid
+  productId        String    @map("product_id") @db.Uuid
+  quantityOrdered  Int       @map("quantity_ordered")
+  quantityReceived Int       @default(0) @map("quantity_received")
+  unitCost         Decimal   @map("unit_cost") @db.Decimal(10, 2)
+  subtotal         Decimal   @db.Decimal(10, 2)
+
+  // Relaciones
+  purchase         Purchase  @relation(fields: [purchaseId], references: [id], onDelete: Cascade)
+  product          Product   @relation(fields: [productId], references: [id], onDelete: Restrict)
+
+  @@map("purchase_items")
+}
+
+// ------------------------------------------------------------------------------
+// 6. ALERTAS PREDICTIVAS, REPOSICIÓN Y CRON JOBS
+// ------------------------------------------------------------------------------
+
+model StockAlert {
+  id           String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  productId    String              @map("product_id") @db.Uuid
+  batchId      String?             @map("batch_id") @db.Uuid
+  alertType    AlertType           @map("alert_type")
+  status       AlertStatus         @default(PENDIENTE)
+  message      String              @db.Text
+  triggeredBy  AlertTriggerSource  @default(CRON_JOB) @map("triggered_by")
+  resolvedById String?             @map("resolved_by_id") @db.Uuid
+  resolvedAt   DateTime?           @map("resolved_at") @db.Timestamptz(6)
+  createdAt    DateTime            @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt    DateTime            @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  // Relaciones
+  product      Product             @relation(fields: [productId], references: [id], onDelete: Cascade)
+  batch        Batch?              @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  resolvedBy   UserProfile?        @relation("ResolvedAlerts", fields: [resolvedById], references: [id], onDelete: SetNull)
+
+  @@index([status, alertType], name: "idx_alerts_status_type")
+  @@map("stock_alerts")
+}
+
+model ReplenishmentSuggestion {
+  id                String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  supplierId        String    @map("supplier_id") @db.Uuid
+  productId         String    @map("product_id") @db.Uuid
+  suggestedQuantity Int       @map("suggested_quantity")
+  estimatedCost     Decimal   @map("estimated_cost") @db.Decimal(10, 2)
+  status            String    @default("SUGERIDO") @db.VarChar(50) // SUGERIDO, ORDEN_GENERADA, DESCARTADO
+  createdAt         DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  // Relaciones
+  supplier          Supplier  @relation(fields: [supplierId], references: [id], onDelete: Cascade)
+  product           Product   @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@map("replenishment_suggestions")
+}
+
+// ------------------------------------------------------------------------------
+// 7. AUDITORÍA FORENSE INMUTABLE
+// ------------------------------------------------------------------------------
+
+model SystemAuditLog {
+  id         String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId     String?      @map("user_id") @db.Uuid
+  action     String       @db.VarChar(100) // ej: "UPDATE_PRODUCT_PRICE", "CANCEL_SALE", "CHANGE_USER_PERMISSIONS"
+  module     String       @db.VarChar(50)
+  tableName  String       @map("table_name") @db.VarChar(100)
+  recordId   String?      @map("record_id") @db.VarChar(100)
+  oldData    Json?        @map("old_data")
+  newData    Json?        @map("new_data")
+  ipAddress  String?      @map("ip_address") @db.VarChar(45)
+  userAgent  String?      @map("user_agent") @db.Text
+  createdAt  DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  // Relaciones
+  user       UserProfile? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([tableName, createdAt], name: "idx_audit_logs_table_date")
+  @@index([userId, createdAt], name: "idx_audit_logs_user_date")
+  @@map("system_audit_logs")
+}

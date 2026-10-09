@@ -1,0 +1,6 @@
+{
+  "name": "Nova Salud - Sistema de Gestión Farmacéutica",
+  "description": "Sistema integral de gestión para boticas y farmacias: inventario FEFO, punto de venta ágil, alertas de reposición, control de lotes y matriz de permisos RBAC.",
+  "requestFramePermissions": ["notifications"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
