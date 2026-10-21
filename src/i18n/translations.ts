@@ -12,7 +12,7 @@ export const TRANSLATIONS = {
     phase8_badge: 'Sistema Operativo v2.6',
 
     // Main Business Tabs
-    tab_dashboard: '📊 Panel General',
+    tab_dashboard: '🏠 Inicio & Bienvenida',
     tab_pos: '🛒 Punto de Venta (POS)',
     tab_inventory: '📦 Inventario & FEFO',
     tab_cash: '💵 Caja & Arqueo',
@@ -225,7 +225,7 @@ export const TRANSLATIONS = {
     phase8_badge: 'Operating System v2.6',
 
     // Main Business Tabs
-    tab_dashboard: '📊 Main Dashboard',
+    tab_dashboard: '🏠 Home & Welcome',
     tab_pos: '🛒 Point of Sale (POS)',
     tab_inventory: '📦 Inventory & FEFO',
     tab_cash: '💵 Cash & Registers',

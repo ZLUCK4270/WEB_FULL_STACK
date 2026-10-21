@@ -17,7 +17,10 @@ import {
   X,
   ChevronRight,
   Database,
-  Activity
+  Activity,
+  FileCode,
+  ArrowRight,
+  UserCheck
 } from 'lucide-react';
 
 interface SidebarDrawerProps {
@@ -42,35 +45,44 @@ export const SidebarDrawer: React.FC<SidebarDrawerProps> = ({
       label: t('tab_dashboard'),
       description: 'Métricas comerciales, Recharts y flujo operativo en tiempo real',
       icon: LayoutDashboard,
-      badge: null
+      group: 'operaciones'
     },
     {
       id: 'pos',
       label: t('tab_pos'),
       description: 'Dispensación rápida con asignación automática FEFO y comprobantes',
       icon: ShoppingCart,
-      badge: 'FEFO Activo'
-    },
-    {
-      id: 'inventory',
-      label: t('tab_inventory'),
-      description: 'Control de lotes, fechas de vencimiento, mermas y cuarentena',
-      icon: Package,
-      badge: null
+      badge: 'FEFO Activo',
+      group: 'operaciones'
     },
     {
       id: 'cash',
       label: t('tab_cash'),
       description: 'Apertura de turno, gastos menores y arqueo físico de caja',
       icon: Banknote,
-      badge: cashRegister.isOpen ? `S/ ${cashRegister.currentCash.toFixed(2)}` : 'Cerrada'
+      badge: cashRegister.isOpen ? `S/ ${cashRegister.currentCash.toFixed(2)}` : 'Cerrada',
+      group: 'operaciones'
+    },
+    {
+      id: 'customers',
+      label: t('tab_customers'),
+      description: 'Fichas de pacientes, historial de compras y alergias',
+      icon: Users,
+      group: 'operaciones'
+    },
+    {
+      id: 'inventory',
+      label: t('tab_inventory'),
+      description: 'Control de lotes, fechas de vencimiento, mermas y cuarentena',
+      icon: Package,
+      group: 'logistica'
     },
     {
       id: 'purchases',
       label: t('tab_purchases'),
       description: 'Droguerías, sugerencias de reposición y órdenes de compra',
       icon: Truck,
-      badge: null
+      group: 'logistica'
     },
     {
       id: 'alerts',
@@ -78,47 +90,54 @@ export const SidebarDrawer: React.FC<SidebarDrawerProps> = ({
       description: 'Vencimientos críticos <30d y quiebres de mostrador',
       icon: BellRing,
       badge: alerts.length > 0 ? `${alerts.length} alertas` : null,
-      badgeAlert: alerts.length > 0
-    },
-    {
-      id: 'customers',
-      label: t('tab_customers'),
-      description: 'Fichas de pacientes, historial de compras y alergias',
-      icon: Users,
-      badge: null
+      badgeAlert: alerts.length > 0,
+      group: 'logistica'
     },
     {
       id: 'staff',
       label: t('tab_staff'),
       description: 'Personal de botica y asignación de permisos del sistema',
       icon: ShieldCheck,
-      badge: null
+      group: 'gestion'
     },
     {
       id: 'reports',
       label: t('tab_reports'),
       description: 'Libro oficial de psicotrópicos DIGEMID y balance regulatorio',
       icon: FileText,
-      badge: 'DIGEMID'
+      badge: 'DIGEMID',
+      group: 'gestion'
     },
     {
       id: 'backups',
       label: '💾 Respaldos & Base de Datos',
-      description: 'Programación de copias automáticas y descarga manual de inventario y ventas',
+      description: 'Programación de copias automáticas y descarga de BD',
       icon: Database,
-      badge: 'Admin'
+      badge: 'Admin',
+      group: 'gestion'
     },
     {
       id: 'audit',
       label: '📋 Log de Actividades & Trazabilidad',
-      description: 'Registro en tiempo real de ventas, inventario y cambios de permisos',
+      description: 'Registro en tiempo real de ventas, inventario y permisos',
       icon: Activity,
-      badge: 'Live'
+      badge: 'Live',
+      group: 'gestion'
+    },
+    {
+      id: 'sql',
+      label: '⚡ Scripts SQL & INSERT JOIN',
+      description: 'Tablas DDL, datos de semilla e inserciones relacionales externas',
+      icon: FileCode,
+      badge: 'SQL',
+      group: 'gestion'
     }
   ];
 
-  // ONLY show the modules this collaborator has access to - Omit completely any non-assigned module
-  const allowedItems = allNavigationItems.filter(item => isTabAllowedForUser(currentUser, item.id));
+  // ONLY show authorized modules for current role
+  const allowedItems = allNavigationItems.filter(item =>
+    isTabAllowedForUser(currentUser, item.id)
+  );
 
   const handleSelectTab = (tabId: string) => {
     setActiveTab(tabId);
@@ -128,7 +147,6 @@ export const SidebarDrawer: React.FC<SidebarDrawerProps> = ({
   const handleSwitchUser = (userId: string) => {
     const targetUser = staffUsers.find(u => u.id === userId);
     switchCurrentUser(userId);
-    // If current activeTab is not allowed for the new user, switch to their default permitted tab
     if (targetUser && !isTabAllowedForUser(targetUser, activeTab)) {
       setActiveTab(getDefaultTabForUser(targetUser));
     }
@@ -153,9 +171,9 @@ export const SidebarDrawer: React.FC<SidebarDrawerProps> = ({
         <aside className="w-screen max-w-sm sm:max-w-md bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 shadow-2xl flex flex-col justify-between overflow-y-auto">
           {/* Top Header of Sidebar */}
           <div>
-            <div className="p-5 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
+            <div className="p-4 sm:p-5 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <div className="h-10 w-10 rounded-xl bg-gradient-to-tr from-emerald-600 to-teal-500 flex items-center justify-center text-white shadow-md shadow-emerald-500/20">
+                <div className="h-10 w-10 rounded-2xl bg-gradient-to-tr from-emerald-600 to-teal-500 flex items-center justify-center text-white shadow-md shadow-emerald-500/20">
                   <Pill className="h-6 w-6" />
                 </div>
                 <div>
@@ -163,19 +181,19 @@ export const SidebarDrawer: React.FC<SidebarDrawerProps> = ({
                     <span className="font-extrabold text-base tracking-tight bg-gradient-to-r from-emerald-600 to-teal-600 bg-clip-text text-transparent">
                       Botica Nova Salud
                     </span>
-                    <span className="px-1.5 py-0.2 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300">
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300">
                       v2.6
                     </span>
                   </div>
                   <p className="text-[11px] text-slate-500 dark:text-slate-400">
-                    Panel Lateral de Operaciones
+                    Sistema de Gestión Farmacéutica Integral
                   </p>
                 </div>
               </div>
 
               <button
                 onClick={onClose}
-                className="p-2 rounded-xl text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition cursor-pointer"
+                className="p-2 rounded-2xl text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition cursor-pointer"
                 aria-label="Cerrar panel lateral"
               >
                 <X className="w-5 h-5" />
@@ -183,18 +201,20 @@ export const SidebarDrawer: React.FC<SidebarDrawerProps> = ({
             </div>
 
             {/* Current Active Staff Card */}
-            <div className="p-4 mx-4 my-3 rounded-2xl bg-gradient-to-br from-slate-50 to-emerald-50/50 dark:from-slate-800/80 dark:to-emerald-950/20 border border-slate-200/80 dark:border-slate-700/60 space-y-2">
+            <div className="p-4 mx-4 my-3 rounded-3xl bg-gradient-to-br from-slate-50 to-emerald-50/50 dark:from-slate-800/80 dark:to-emerald-950/20 border border-slate-200/80 dark:border-slate-700/60 space-y-2 shadow-2xs">
               <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2.5">
-                  <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-sm font-bold shadow-xs text-white ${
-                    currentUser.role === 'regente'
-                      ? 'bg-emerald-600'
-                      : currentUser.role === 'admin'
-                      ? 'bg-blue-600'
-                      : currentUser.role === 'cajero'
-                      ? 'bg-purple-600'
-                      : 'bg-amber-600'
-                  }`}>
+                <div className="flex items-center gap-3">
+                  <div
+                    className={`w-10 h-10 rounded-2xl flex items-center justify-center text-sm font-bold shadow-xs text-white ${
+                      currentUser.role === 'regente'
+                        ? 'bg-emerald-600'
+                        : currentUser.role === 'admin'
+                        ? 'bg-blue-600'
+                        : currentUser.role === 'cajero'
+                        ? 'bg-purple-600'
+                        : 'bg-amber-600'
+                    }`}
+                  >
                     {currentUser.avatarInitials}
                   </div>
                   <div>
@@ -213,10 +233,10 @@ export const SidebarDrawer: React.FC<SidebarDrawerProps> = ({
               </div>
             </div>
 
-            {/* Navigation Options List - ONLY showing authorized modules */}
+            {/* Navigation Options List */}
             <div className="px-3 py-2 space-y-1">
-              <div className="px-3 py-1.5 text-[11px] font-bold text-slate-400 dark:text-slate-400 uppercase tracking-wider">
-                Módulos de Gestión
+              <div className="px-3 py-1.5 text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+                Módulos Habilitados ({allowedItems.length})
               </div>
 
               {allowedItems.map(item => {
@@ -227,40 +247,46 @@ export const SidebarDrawer: React.FC<SidebarDrawerProps> = ({
                   <button
                     key={item.id}
                     onClick={() => handleSelectTab(item.id)}
-                    className={`w-full p-2.5 rounded-xl flex items-center justify-between transition-all text-left cursor-pointer ${
+                    className={`w-full p-2.5 rounded-2xl flex items-center justify-between transition-all text-left cursor-pointer group ${
                       isSelected
                         ? 'bg-emerald-600 text-white font-bold shadow-md shadow-emerald-600/20'
                         : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800/80'
                     }`}
                   >
                     <div className="flex items-center gap-3 min-w-0">
-                      <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${
-                        isSelected
-                          ? 'bg-white/20 text-white'
-                          : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400'
-                      }`}>
+                      <div
+                        className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 transition-transform group-hover:scale-105 ${
+                          isSelected
+                            ? 'bg-white/20 text-white'
+                            : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400'
+                        }`}
+                      >
                         <Icon className="w-4 h-4" />
                       </div>
                       <div className="min-w-0">
-                        <div className="text-xs font-bold truncate">
-                          {item.label}
-                        </div>
-                        <div className={`text-[10px] truncate ${
-                          isSelected ? 'text-emerald-100' : 'text-slate-400 dark:text-slate-500'
-                        }`}>
+                        <div className="text-xs font-bold truncate">{item.label}</div>
+                        <div
+                          className={`text-[11px] line-clamp-1 ${
+                            isSelected
+                              ? 'text-emerald-100'
+                              : 'text-slate-400 dark:text-slate-500'
+                          }`}
+                        >
                           {item.description}
                         </div>
                       </div>
                     </div>
 
                     {item.badge && (
-                      <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold shrink-0 ml-2 ${
-                        isSelected
-                          ? 'bg-white/20 text-white'
-                          : item.badgeAlert
-                          ? 'bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300 animate-pulse'
-                          : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400'
-                      }`}>
+                      <span
+                        className={`ml-2 px-2 py-0.5 rounded-full text-[10px] font-extrabold shrink-0 ${
+                          isSelected
+                            ? 'bg-white text-emerald-700'
+                            : (item as any).badgeAlert
+                            ? 'bg-amber-100 dark:bg-amber-950 text-amber-800 dark:text-amber-300 animate-pulse'
+                            : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300'
+                        }`}
+                      >
                         {item.badge}
                       </span>
                     )}
@@ -270,34 +296,63 @@ export const SidebarDrawer: React.FC<SidebarDrawerProps> = ({
             </div>
           </div>
 
-          {/* Bottom Actions of Sidebar */}
-          <div className="p-4 border-t border-slate-200 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-950/60 space-y-3">
-            <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider px-1">
-              Cambio de Colaborador en Turno
+          {/* Bottom of Drawer: User Switcher & Logout */}
+          <div className="p-4 border-t border-slate-200 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-900/60 space-y-3">
+            {/* Supervised Shift Switcher (For quick administrative evaluation) */}
+            <div>
+              <div className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                <UserCheck className="w-3.5 h-3.5 text-emerald-600" />
+                <span>Supervisión de Turnos:</span>
+              </div>
+              <div className="grid grid-cols-2 gap-1.5">
+                {staffUsers.map(user => {
+                  const isCurrent = user.id === currentUser.id;
+                  return (
+                    <button
+                      key={user.id}
+                      onClick={() => handleSwitchUser(user.id)}
+                      className={`p-2 rounded-xl text-left text-xs transition border flex items-center gap-2 cursor-pointer ${
+                        isCurrent
+                          ? 'bg-emerald-600 text-white font-bold border-emerald-600 shadow-2xs'
+                          : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:border-emerald-400'
+                      }`}
+                    >
+                      <div
+                        className={`w-6 h-6 rounded-lg flex items-center justify-center text-[10px] font-bold shrink-0 text-white ${
+                          user.role === 'regente'
+                            ? 'bg-emerald-600'
+                            : user.role === 'admin'
+                            ? 'bg-blue-600'
+                            : user.role === 'cajero'
+                            ? 'bg-purple-600'
+                            : 'bg-amber-600'
+                        }`}
+                      >
+                        {user.avatarInitials}
+                      </div>
+                      <div className="min-w-0">
+                        <div className="font-bold truncate text-[11px]">{user.name.split(' ')[0]}</div>
+                        <div
+                          className={`text-[9px] truncate ${
+                            isCurrent ? 'text-emerald-100' : 'text-slate-400'
+                          }`}
+                        >
+                          {user.roleTitle.split('/')[0]}
+                        </div>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
             </div>
 
-            {/* Quick Switch User */}
-            <div className="space-y-1.5">
-              <select
-                value={currentUser.id}
-                onChange={e => handleSwitchUser(e.target.value)}
-                className="w-full text-xs p-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 font-semibold focus:ring-2 focus:ring-emerald-500 outline-hidden cursor-pointer"
-              >
-                {staffUsers.map(u => (
-                  <option key={u.id} value={u.id}>
-                    {u.name} — {u.roleTitle}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            {/* Logout Button */}
+            {/* Logout button */}
             <button
               onClick={handleLogout}
-              className="w-full py-3 px-4 rounded-xl bg-gradient-to-r from-rose-600 to-rose-700 hover:from-rose-500 hover:to-rose-600 text-white font-extrabold text-xs transition shadow-md shadow-rose-900/20 active:scale-98 flex items-center justify-center gap-2 cursor-pointer"
+              className="w-full py-2.5 px-3 rounded-2xl bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/40 dark:hover:bg-rose-900/60 text-rose-700 dark:text-rose-300 font-bold text-xs flex items-center justify-center gap-2 transition cursor-pointer border border-rose-200 dark:border-rose-900/50"
             >
               <LogOut className="w-4 h-4" />
-              <span>{t('logout')}</span>
+              <span>Cerrar Sesión & Finalizar Turno</span>
             </button>
           </div>
         </aside>

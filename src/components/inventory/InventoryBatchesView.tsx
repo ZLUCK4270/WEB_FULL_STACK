@@ -103,23 +103,26 @@ export const InventoryBatchesView: React.FC = () => {
     });
   }, [products, batches, searchTerm, filterTab]);
 
+  const [batchError, setBatchError] = useState<string | null>(null);
+
   // Handle Submit New Batch
   const handleSaveNewBatch = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newBatchForm.productId || !newBatchForm.batchCode || !newBatchForm.expirationDate) {
-      alert('Por favor complete todos los campos obligatorios del lote.');
+    if (!newBatchForm.productId || !newBatchForm.batchCode.trim() || !newBatchForm.expirationDate) {
+      setBatchError('Por favor complete todos los campos obligatorios del lote (código y fecha de vencimiento).');
       return;
     }
 
     receiveNewBatch({
       productId: newBatchForm.productId,
-      batchCode: newBatchForm.batchCode,
+      batchCode: newBatchForm.batchCode.trim(),
       expirationDate: newBatchForm.expirationDate,
       stock: Number(newBatchForm.stock),
       unitCost: Number(newBatchForm.unitCost),
       supplierName: newBatchForm.supplierName
     });
 
+    setBatchError(null);
     setIsNewBatchModalOpen(false);
     setNewBatchForm({
       productId: products[0]?.id || '',
@@ -603,12 +606,22 @@ export const InventoryBatchesView: React.FC = () => {
                 Registrar Ingreso de Lote (Recepción Almacén)
               </h3>
               <button
-                onClick={() => setIsNewBatchModalOpen(false)}
+                onClick={() => {
+                  setIsNewBatchModalOpen(false);
+                  setBatchError(null);
+                }}
                 className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
+
+            {batchError && (
+              <div className="p-2.5 rounded-xl bg-rose-50 dark:bg-rose-950/60 border border-rose-200 dark:border-rose-800 text-xs text-rose-700 dark:text-rose-300 flex items-center gap-2">
+                <AlertTriangle className="w-4 h-4 shrink-0" />
+                <span>{batchError}</span>
+              </div>
+            )}
 
             <form onSubmit={handleSaveNewBatch} className="space-y-4 text-xs">
               <div>

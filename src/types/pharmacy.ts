@@ -287,6 +287,7 @@ export interface ActivityLogEntry {
     stockDelta?: number;
     targetStock?: number;
     affectedUser?: string;
+    role?: string;
     permissionsChanged?: string[];
     allowedTabsCount?: number;
     reason?: string;

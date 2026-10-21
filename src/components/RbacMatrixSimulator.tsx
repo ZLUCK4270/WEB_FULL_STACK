@@ -24,7 +24,7 @@ export const RbacMatrixSimulator: React.FC = () => {
 
   const handleToggle = (moduleId: string, action: 'view' | 'create' | 'edit' | 'delete') => {
     if (selectedRole === 'administrador') {
-      alert('Regla BR-SEC-01: El Administrador Propietario posee acceso total inmutable y no puede ser restringido.');
+      triggerRealtimeToast('Regla BR-SEC-01: El Administrador Propietario posee acceso total inmutable y no puede ser modificado.');
       return;
     }
 

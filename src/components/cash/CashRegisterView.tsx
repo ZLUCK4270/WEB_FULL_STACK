@@ -70,22 +70,25 @@ export const CashRegisterView: React.FC = () => {
   const expectedCash = cashRegister.currentCash;
   const cashDifference = +(countedPhysicalTotal - expectedCash).toFixed(2);
 
+  const [formError, setFormError] = useState<string | null>(null);
+
   // Submit Movement
   const handleSaveMovement = (e: React.FormEvent) => {
     e.preventDefault();
-    if (movementForm.amount <= 0 || !movementForm.concept) {
-      alert('Por favor ingrese un monto y concepto válidos.');
+    if (movementForm.amount <= 0 || !movementForm.concept.trim()) {
+      setFormError('Por favor ingrese un monto mayor a 0 y especifique el concepto del movimiento.');
       return;
     }
 
     addCashMovement(
       movementForm.type,
-      movementForm.concept,
+      movementForm.concept.trim(),
       Number(movementForm.amount),
       movementForm.category,
       movementForm.voucher
     );
 
+    setFormError(null);
     setIsMovementModalOpen(false);
     setMovementForm({
       type: 'egreso',
@@ -307,12 +310,22 @@ export const CashRegisterView: React.FC = () => {
                 Registrar Movimiento de Caja Chica
               </h3>
               <button
-                onClick={() => setIsMovementModalOpen(false)}
+                onClick={() => {
+                  setIsMovementModalOpen(false);
+                  setFormError(null);
+                }}
                 className="text-slate-400 hover:text-slate-600"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
+
+            {formError && (
+              <div className="p-2.5 rounded-xl bg-rose-50 dark:bg-rose-950/60 border border-rose-200 dark:border-rose-800 text-xs text-rose-700 dark:text-rose-300 flex items-center gap-2">
+                <AlertTriangle className="w-4 h-4 shrink-0" />
+                <span>{formError}</span>
+              </div>
+            )}
 
             <form onSubmit={handleSaveMovement} className="space-y-4 text-xs">
               <div className="grid grid-cols-2 gap-2">

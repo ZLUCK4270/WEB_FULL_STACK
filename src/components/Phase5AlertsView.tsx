@@ -22,6 +22,7 @@ export const Phase5AlertsView: React.FC = () => {
   const [copied, setCopied] = useState<boolean>(false);
   const [isCronRunning, setIsCronRunning] = useState<boolean>(false);
   const [realtimeBroadcastEvent, setRealtimeBroadcastEvent] = useState<any>(null);
+  const [orderToast, setOrderToast] = useState<string | null>(null);
 
   const initialAlerts: MockAlert[] = [
     {
@@ -379,6 +380,22 @@ export const Phase5AlertsView: React.FC = () => {
             </p>
           </div>
 
+          {orderToast && (
+            <div className="p-3 rounded-xl bg-emerald-50 dark:bg-emerald-950/70 border border-emerald-300 dark:border-emerald-700 text-xs text-emerald-900 dark:text-emerald-100 flex items-center justify-between animate-in fade-in">
+              <div className="flex items-center gap-2">
+                <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                <span className="font-semibold">{orderToast}</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setOrderToast(null)}
+                className="text-xs text-emerald-700 dark:text-emerald-300 hover:underline font-bold ml-3"
+              >
+                Cerrar
+              </button>
+            </div>
+          )}
+
           <div className="space-y-4">
             {/* Grupo 1: Farmaindustria */}
             <div className="p-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/40 space-y-3">
@@ -408,8 +425,8 @@ export const Phase5AlertsView: React.FC = () => {
 
               <div className="pt-2 flex justify-end">
                 <button
-                  onClick={() => alert('Orden de compra generada en formato borrador (Módulo MOD-04 Compras).')}
-                  className="px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white font-semibold text-xs transition"
+                  onClick={() => setOrderToast('Orden de compra OC-2026-0085 generada en formato borrador (Módulo Compras).')}
+                  className="px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white font-semibold text-xs transition active:scale-95"
                 >
                   Generar Orden de Compra (OC-2026-0085)
                 </button>
@@ -440,8 +457,8 @@ export const Phase5AlertsView: React.FC = () => {
 
               <div className="pt-2 flex justify-end">
                 <button
-                  onClick={() => alert('Orden de compra generada en formato borrador (Módulo MOD-04 Compras).')}
-                  className="px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white font-semibold text-xs transition"
+                  onClick={() => setOrderToast('Orden de compra OC-2026-0086 generada en formato borrador (Módulo Compras).')}
+                  className="px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white font-semibold text-xs transition active:scale-95"
                 >
                   Generar Orden de Compra (OC-2026-0086)
                 </button>

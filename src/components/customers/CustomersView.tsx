@@ -31,6 +31,8 @@ export const CustomersView: React.FC = () => {
     chronicConditions: ''
   });
 
+  const [customerError, setCustomerError] = useState<string | null>(null);
+
   const filteredCustomers = customers.filter(c =>
     c.fullName.toLowerCase().includes(searchTerm.toLowerCase()) ||
     c.docNumber.includes(searchTerm) ||
@@ -39,15 +41,15 @@ export const CustomersView: React.FC = () => {
 
   const handleSaveCustomer = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newCustForm.docNumber || !newCustForm.fullName) {
-      alert('Por favor ingrese el número de documento y nombre completo.');
+    if (!newCustForm.docNumber.trim() || !newCustForm.fullName.trim()) {
+      setCustomerError('Por favor ingrese el número de documento y nombre completo del paciente.');
       return;
     }
 
     addCustomer({
       docType: newCustForm.docType,
-      docNumber: newCustForm.docNumber,
-      fullName: newCustForm.fullName,
+      docNumber: newCustForm.docNumber.trim(),
+      fullName: newCustForm.fullName.trim(),
       phone: newCustForm.phone,
       email: newCustForm.email,
       address: newCustForm.address,
@@ -59,6 +61,7 @@ export const CustomersView: React.FC = () => {
         : []
     });
 
+    setCustomerError(null);
     setIsNewCustModalOpen(false);
     setNewCustForm({
       docType: 'DNI',
@@ -204,12 +207,22 @@ export const CustomersView: React.FC = () => {
                 Registrar Ficha de Paciente
               </h3>
               <button
-                onClick={() => setIsNewCustModalOpen(false)}
+                onClick={() => {
+                  setIsNewCustModalOpen(false);
+                  setCustomerError(null);
+                }}
                 className="text-slate-400 hover:text-slate-600"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
+
+            {customerError && (
+              <div className="p-2.5 rounded-xl bg-rose-50 dark:bg-rose-950/60 border border-rose-200 dark:border-rose-800 text-xs text-rose-700 dark:text-rose-300 flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 shrink-0" />
+                <span>{customerError}</span>
+              </div>
+            )}
 
             <form onSubmit={handleSaveCustomer} className="space-y-4 text-xs">
               <div className="grid grid-cols-3 gap-2">

@@ -30,6 +30,7 @@ import {
   Activity
 } from 'lucide-react';
 import { ResumenDelDia } from './ResumenDelDia';
+import { ExecutivePerformanceCharts } from './ExecutivePerformanceCharts';
 import { SalesTrend7DaysChart } from './SalesTrend7DaysChart';
 import { CustomPeriodComparisonSection } from './CustomPeriodComparisonSection';
 import { calculate7DaysTrend } from '../../utils/salesAnalytics';
@@ -366,6 +367,9 @@ export const BusinessExecutiveDashboard: React.FC<BusinessExecutiveDashboardProp
 
       {/* Componente Resumen del Día */}
       <ResumenDelDia onNavigate={onNavigate} />
+
+      {/* Gráficos de Rendimiento Ejecutivo: Ventas Diarias & Productos con Mayor Rotación (Recharts) */}
+      <ExecutivePerformanceCharts onNavigate={onNavigate} />
 
       {/* Tendencia de Ventas de los Últimos 7 Días (Recharts) */}
       <SalesTrend7DaysChart onNavigate={onNavigate} />

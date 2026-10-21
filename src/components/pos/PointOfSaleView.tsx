@@ -514,6 +514,37 @@ export const PointOfSaleView: React.FC = () => {
         </div>
       </div>
 
+      {/* Floating Mobile Cart Bar when cart has items */}
+      {cart.length > 0 && (
+        <div className="lg:hidden fixed bottom-20 left-3 right-3 z-30 animate-in slide-in-from-bottom-3 duration-200">
+          <div className="bg-slate-900/95 backdrop-blur-md text-white p-3 rounded-2xl shadow-2xl border border-slate-700/80 flex items-center justify-between">
+            <div className="flex items-center gap-2.5">
+              <div className="w-9 h-9 rounded-xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center font-bold">
+                <ShoppingCart className="w-5 h-5" />
+              </div>
+              <div>
+                <div className="text-xs font-bold">
+                  {cart.reduce((sum, i) => sum + i.quantity, 0)}{' '}
+                  {cart.reduce((sum, i) => sum + i.quantity, 0) === 1 ? 'ítem' : 'ítems'} en carrito
+                </div>
+                <div className="text-[11px] text-emerald-400 font-extrabold">
+                  Total: S/ {cartTotal.toFixed(2)}
+                </div>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={handleOpenCheckout}
+              className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-black text-xs shadow-md transition active:scale-95 flex items-center gap-1.5 cursor-pointer"
+            >
+              <span>Cobrar</span>
+              <Banknote className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* MODAL: Checkout / Payment */}
       {isCheckoutModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-xs animate-in fade-in duration-200">

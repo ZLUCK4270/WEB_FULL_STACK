@@ -53,7 +53,8 @@ const INITIAL_STAFF: StaffUser[] = [
       'staff',
       'reports',
       'backups',
-      'audit'
+      'audit',
+      'sql'
     ],
     permissions: {
       canSell: true,
@@ -77,6 +78,7 @@ const INITIAL_STAFF: StaffUser[] = [
     activeShift: 'mañana',
     avatarInitials: 'AM',
     allowedTabs: [
+      'dashboard',
       'pos',
       'cash',
       'customers',
@@ -114,7 +116,8 @@ const INITIAL_STAFF: StaffUser[] = [
       'staff',
       'reports',
       'backups',
-      'audit'
+      'audit',
+      'sql'
     ],
     permissions: {
       canSell: true,
@@ -138,6 +141,7 @@ const INITIAL_STAFF: StaffUser[] = [
     activeShift: 'mañana',
     avatarInitials: 'LT',
     allowedTabs: [
+      'dashboard',
       'inventory',
       'purchases',
       'alerts'
@@ -841,6 +845,9 @@ interface PharmacyContextType {
 
   // Staff & Permissions Management (Administrator)
   updateStaffPermissions: (userId: string, allowedTabs: string[], permissions?: Partial<StaffUser['permissions']>) => void;
+  addStaffUser: (user: Omit<StaffUser, 'id' | 'avatarInitials'>) => StaffUser;
+  updateStaffUserPassword: (userId: string, newPassword: string) => boolean;
+  deleteStaffUser: (userId: string) => { success: boolean; error?: string };
 
   // Operational Management Date (Rotative Dates: 08/10, 09/10, 10/10, etc.)
   systemDate: string;
@@ -1057,9 +1064,39 @@ export const PharmacyProvider: React.FC<{ children: ReactNode }> = ({ children }
   const [suppliers, setSuppliers] = useState<Supplier[]>(INITIAL_SUPPLIERS);
   const [purchaseOrders, setPurchaseOrders] = useState<PurchaseOrder[]>(INITIAL_PURCHASE_ORDERS);
   const [customers, setCustomers] = useState<Customer[]>(INITIAL_CUSTOMERS);
-  const [staffUsers, setStaffUsers] = useState<StaffUser[]>(INITIAL_STAFF);
-  const [currentUser, setCurrentUser] = useState<StaffUser>(INITIAL_STAFF[0]); // Default Dr. Carlos Mendoza
-  const [isLoggedIn, setIsLoggedIn] = useState<boolean>(true);
+  const [staffUsers, setStaffUsers] = useState<StaffUser[]>(() => {
+    try {
+      const stored = localStorage.getItem('novasalud_staff_users');
+      if (stored) {
+        const parsed: StaffUser[] = JSON.parse(stored);
+        // Ensure every role includes 'dashboard' for the welcome portal
+        return parsed.map(u => ({
+          ...u,
+          allowedTabs: u.allowedTabs.includes('dashboard') ? u.allowedTabs : ['dashboard', ...u.allowedTabs]
+        }));
+      }
+    } catch (e) {}
+    return INITIAL_STAFF;
+  });
+  const [currentUser, setCurrentUser] = useState<StaffUser>(() => {
+    try {
+      const activeId = localStorage.getItem('novasalud_active_user_id');
+      const stored = localStorage.getItem('novasalud_staff_users');
+      const users: StaffUser[] = stored ? JSON.parse(stored) : INITIAL_STAFF;
+      const found = users.find(u => u.id === activeId);
+      if (found) {
+        return {
+          ...found,
+          allowedTabs: found.allowedTabs.includes('dashboard') ? found.allowedTabs : ['dashboard', ...found.allowedTabs]
+        };
+      }
+      return users[0] || INITIAL_STAFF[0];
+    } catch (e) {
+      return INITIAL_STAFF[0];
+    }
+  });
+  // The system starts with the Login screen as requested
+  const [isLoggedIn, setIsLoggedIn] = useState<boolean>(false);
 
   // Active Management Date (Rotative: 2026-10-08, 2026-10-09, 2026-10-10, etc.)
   const [systemDate, setSystemDate] = useState<string>(() => {
@@ -1717,7 +1754,14 @@ export const PharmacyProvider: React.FC<{ children: ReactNode }> = ({ children }
     if (!usernameOrId || !usernameOrId.trim()) {
       return {
         success: false,
-        error: 'Por favor ingrese su nombre de usuario, DNI o identificador de colaborador.'
+        error: 'Por favor ingrese su usuario o DNI.'
+      };
+    }
+
+    if (!password || !password.trim()) {
+      return {
+        success: false,
+        error: 'Por favor ingrese su contraseña.'
       };
     }
 
@@ -1726,25 +1770,23 @@ export const PharmacyProvider: React.FC<{ children: ReactNode }> = ({ children }
       u.id.toLowerCase() === cleanQuery ||
       u.username.toLowerCase() === cleanQuery ||
       u.dni.toLowerCase() === cleanQuery ||
-      u.name.toLowerCase().includes(cleanQuery)
+      u.email.toLowerCase() === cleanQuery
     );
 
     if (!found) {
       return {
         success: false,
-        error: `El usuario o colaborador "${usernameOrId}" no figura en el padrón de Botica Nova Salud. Verifique su usuario o use las cuentas sugeridas.`
+        error: 'Usuario o DNI no registrado en el sistema. Verifique sus credenciales o solicite su alta al administrador.'
       };
     }
 
-    // Verify password if provided or user has password configured
-    if (password !== undefined && password !== '') {
-      const validPass = found.password || '1234';
-      if (password !== validPass && password !== '1234') {
-        return {
-          success: false,
-          error: 'Contraseña incorrecta. Por favor intente nuevamente o utilice el botón de demostración rápida.'
-        };
-      }
+    // Verify password strictly against assigned credential
+    const validPass = found.password || '1234';
+    if (password !== validPass) {
+      return {
+        success: false,
+        error: 'Contraseña incorrecta. Verifique sus credenciales e intente nuevamente.'
+      };
     }
 
     const updatedUser: StaffUser = {
@@ -1754,6 +1796,11 @@ export const PharmacyProvider: React.FC<{ children: ReactNode }> = ({ children }
 
     setCurrentUser(updatedUser);
     setIsLoggedIn(true);
+
+    try {
+      localStorage.setItem('novasalud_logged_in', 'true');
+      localStorage.setItem('novasalud_active_user_id', updatedUser.id);
+    } catch (e) {}
 
     sendPushAlert({
       title: `Turno Iniciado: ${updatedUser.name}`,
@@ -1778,6 +1825,48 @@ export const PharmacyProvider: React.FC<{ children: ReactNode }> = ({ children }
     return { success: true, user: updatedUser };
   };
 
+  const addStaffUser = (userData: Omit<StaffUser, 'id' | 'avatarInitials'>): StaffUser => {
+    const initials = userData.name
+      .split(' ')
+      .filter(Boolean)
+      .slice(0, 2)
+      .map(w => w[0].toUpperCase())
+      .join('') || 'CO';
+
+    const newUser: StaffUser = {
+      ...userData,
+      id: `usr-${Date.now()}`,
+      avatarInitials: initials
+    };
+
+    setStaffUsers(prev => {
+      const updated = [newUser, ...prev];
+      try {
+        localStorage.setItem('novasalud_staff_users', JSON.stringify(updated));
+      } catch (e) {}
+      return updated;
+    });
+
+    logActivity({
+      category: 'PERMISOS',
+      action: 'Registro de Nuevo Colaborador',
+      description: `El administrador registró al colaborador ${newUser.name} (@${newUser.username}) con rol ${newUser.roleTitle}.`,
+      severity: 'success',
+      metadata: {
+        affectedUser: newUser.name,
+        role: newUser.role
+      }
+    });
+
+    sendPushAlert({
+      title: 'Nuevo Colaborador Registrado',
+      body: `${newUser.name} habilitado en el sistema con rol ${newUser.roleTitle}.`,
+      category: 'INFO'
+    });
+
+    return newUser;
+  };
+
   const updateStaffPermissions = (
     userId: string,
     allowedTabs: string[],
@@ -1785,8 +1874,8 @@ export const PharmacyProvider: React.FC<{ children: ReactNode }> = ({ children }
   ) => {
     const targetUser = staffUsers.find(u => u.id === userId);
 
-    setStaffUsers(prev =>
-      prev.map(u => {
+    setStaffUsers(prev => {
+      const nextUsers = prev.map(u => {
         if (u.id === userId) {
           const updated: StaffUser = {
             ...u,
@@ -1799,8 +1888,14 @@ export const PharmacyProvider: React.FC<{ children: ReactNode }> = ({ children }
           return updated;
         }
         return u;
-      })
-    );
+      });
+
+      try {
+        localStorage.setItem('novasalud_staff_users', JSON.stringify(nextUsers));
+      } catch (e) {}
+
+      return nextUsers;
+    });
 
     sendPushAlert({
       title: 'Permisos de Colaborador Actualizados',
@@ -1821,6 +1916,75 @@ export const PharmacyProvider: React.FC<{ children: ReactNode }> = ({ children }
     });
   };
 
+  const updateStaffUserPassword = (userId: string, newPassword: string): boolean => {
+    if (!newPassword || newPassword.trim().length < 3) return false;
+    const target = staffUsers.find(u => u.id === userId);
+    if (!target) return false;
+
+    setStaffUsers(prev => {
+      const updated = prev.map(u => {
+        if (u.id === userId) {
+          const uUpdated = { ...u, password: newPassword.trim() };
+          if (currentUser.id === userId) {
+            setCurrentUser(uUpdated);
+          }
+          return uUpdated;
+        }
+        return u;
+      });
+      try {
+        localStorage.setItem('novasalud_staff_users', JSON.stringify(updated));
+      } catch (e) {}
+      return updated;
+    });
+
+    logActivity({
+      category: 'PERMISOS',
+      action: 'Actualización de Credenciales de Acceso',
+      description: `El administrador actualizó la contraseña de acceso para ${target.name} (@${target.username}).`,
+      severity: 'warning',
+      metadata: {
+        affectedUser: target.name
+      }
+    });
+
+    return true;
+  };
+
+  const deleteStaffUser = (userId: string): { success: boolean; error?: string } => {
+    if (staffUsers.length <= 1) {
+      return { success: false, error: 'No se puede eliminar el único colaborador registrado en el sistema.' };
+    }
+    if (currentUser.id === userId) {
+      return { success: false, error: 'No puede eliminar al colaborador que tiene la sesión activa actualmente.' };
+    }
+
+    const target = staffUsers.find(u => u.id === userId);
+    if (!target) {
+      return { success: false, error: 'Colaborador no encontrado.' };
+    }
+
+    setStaffUsers(prev => {
+      const updated = prev.filter(u => u.id !== userId);
+      try {
+        localStorage.setItem('novasalud_staff_users', JSON.stringify(updated));
+      } catch (e) {}
+      return updated;
+    });
+
+    logActivity({
+      category: 'PERMISOS',
+      action: 'Baja de Colaborador del Sistema',
+      description: `El administrador dio de baja al colaborador ${target.name} (@${target.username}) del sistema.`,
+      severity: 'critical',
+      metadata: {
+        affectedUser: target.name
+      }
+    });
+
+    return { success: true };
+  };
+
   const logout = () => {
     logActivity({
       category: 'SEGURIDAD',
@@ -1828,6 +1992,10 @@ export const PharmacyProvider: React.FC<{ children: ReactNode }> = ({ children }
       description: `El colaborador ${currentUser.name} cerró su sesión de turno.`,
       severity: 'info'
     });
+
+    try {
+      localStorage.removeItem('novasalud_logged_in');
+    } catch (e) {}
 
     setIsLoggedIn(false);
     sendPushAlert({
@@ -2082,6 +2250,9 @@ export const PharmacyProvider: React.FC<{ children: ReactNode }> = ({ children }
         dismissAlert,
         resolveAlertAction,
         updateStaffPermissions,
+        addStaffUser,
+        updateStaffUserPassword,
+        deleteStaffUser,
         systemDate,
         setSystemDate,
         advanceSystemDate,
