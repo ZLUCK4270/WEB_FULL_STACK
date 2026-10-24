@@ -1,0 +1,61 @@
+version: '3.8'
+
+services:
+  sqlserver:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    container_name: novasalud-sqlserver
+    environment:
+      SA_PASSWORD: "NovaSalud2026!"
+      ACCEPT_EULA: "Y"
+      MSSQL_PID: Express
+    ports:
+      - "1433:1433"
+    volumes:
+      - sqlserver_data:/var/opt/mssql
+    networks:
+      - novasalud_net
+    healthcheck:
+      test: [ "CMD", "/opt/mssql-tools18/bin/sqlcmd", "-C", "-S", "localhost", "-U", "sa", "-P", "NovaSalud2026!", "-Q", "SELECT 1" ]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  backend:
+    build: ./backend
+    container_name: novasalud-backend
+    ports:
+      - "8081:8081"
+    environment:
+      DB_USER: novasalud
+      DB_PASSWORD: "NovaSalud2026!"
+      DB_DATABASE: NovaSalud
+      DB_SERVER: sqlserver
+      DB_PORT: 1433
+      DB_ENCRYPT: "false"
+      JWT_SECRET: nova_salud_secreto_curso_2026
+      JWT_EXPIRES_IN: 24h
+      PORT: 8081
+    depends_on:
+      sqlserver:
+        condition: service_healthy
+    networks:
+      - novasalud_net
+
+  frontend:
+    build: ./frontend
+    container_name: novasalud-frontend
+    ports:
+      - "3000:80"
+    environment:
+      VITE_API_URL: http://localhost:8081/api
+    depends_on:
+      - backend
+    networks:
+      - novasalud_net
+
+networks:
+  novasalud_net:
+    driver: bridge
+
+volumes:
+  sqlserver_data:
