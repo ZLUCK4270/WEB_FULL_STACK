@@ -1,399 +1,560 @@
-import React, { createContext, useContext, useState, useEffect, useCallback, useMemo, ReactNode } from 'react';
+import React, {
+  createContext,
+  useContext,
+  useState,
+  useEffect,
+  useCallback,
+  useMemo,
+  ReactNode
+} from 'react';
 import {
+  AuthUser,
+  UserRole,
   Product,
   Batch,
   Sale,
   CartItem,
-  CashRegister,
-  CashMovement,
-  Supplier,
-  PurchaseOrder,
   Customer,
-  StaffUser,
   SystemAlert,
+  DashboardStats,
   ReceiptType,
-  PaymentMethod,
-  BackupScheduleConfig,
-  BackupRecord,
-  BackupScope,
-  ActivityLogEntry,
-  ActivityActionCategory,
-  ActivitySeverity
+  PaymentMethod
 } from '../types/pharmacy';
 import {
   authApi,
   salesApi,
   inventoryApi,
-  cashApi,
   alertsApi,
-  auditApi,
+  customersApi,
+  dashboardApi,
   healthApi
 } from '../services/pharmacyApi';
-
-// --- INITIAL SEED DATA (fallback si el backend no está disponible) ---
-const INITIAL_STAFF: StaffUser[] = [
-  {
-    id: 'a0000000-0000-0000-0000-000000000001',
-    username: 'cmendoza',
-    password: 'regente2026',
-    name: 'Dr. Carlos Mendoza Flores',
-    role: 'regente',
-    roleTitle: 'Administrador Propietario',
-    dni: '10203040',
-    email: 'admin@novasalud.pe',
-    colegiatura: 'CQFP N° 18492',
-    activeShift: 'mañana',
-    avatarInitials: 'CM',
-    allowedTabs: [
-      'dashboard', 'pos', 'inventory', 'cash', 'purchases', 'alerts',
-      'customers', 'staff', 'reports', 'backups', 'audit'
-    ],
-    permissions: {
-      canSell: true, canReceiveBatches: true, canAdjustStock: true,
-      canOpenCloseCash: true, canViewFinancials: true, canManageStaff: true,
-      canSignDigemidReports: true
-    }
-  },
-  {
-    id: 'b0000000-0000-0000-0000-000000000002',
-    username: 'amorales',
-    password: 'caja2026',
-    name: 'Juan Manuel Pérez García',
-    role: 'cajero',
-    roleTitle: 'Cajero / Atención Mostrador',
-    dni: '71829304',
-    email: 'cajero@novasalud.pe',
-    activeShift: 'mañana',
-    avatarInitials: 'JM',
-    allowedTabs: ['pos', 'cash', 'customers', 'alerts'],
-    permissions: {
-      canSell: true, canReceiveBatches: false, canAdjustStock: false,
-      canOpenCloseCash: true, canViewFinancials: false, canManageStaff: false,
-      canSignDigemidReports: false
-    }
-  },
-  {
-    id: 'c0000000-0000-0000-0000-000000000003',
-    username: 'ltorres',
-    password: 'almacen2026',
-    name: 'Luis Torres Valdivia',
-    role: 'almacen',
-    roleTitle: 'Almacén y Logística',
-    dni: '76543210',
-    email: 'almacen@novasalud.pe',
-    activeShift: 'mañana',
-    avatarInitials: 'LT',
-    allowedTabs: ['inventory', 'purchases', 'alerts'],
-    permissions: {
-      canSell: false, canReceiveBatches: true, canAdjustStock: true,
-      canOpenCloseCash: false, canViewFinancials: false, canManageStaff: false,
-      canSignDigemidReports: false
-    }
-  }
-];
+import { extractError, setUnauthorizedHandler } from '../services/api';
 
 interface PharmacyContextType {
-  products: Product[];
-  batches: Batch[];
-  sales: Sale[];
-  cashRegister: CashRegister;
-  suppliers: Supplier[];
-  purchaseOrders: PurchaseOrder[];
-  customers: Customer[];
-  staffUsers: StaffUser[];
-  currentUser: StaffUser | null;
-  alerts: SystemAlert[];
-
-  isLoggedIn: boolean;
+  user: AuthUser | null;
+  isAuthenticated: boolean;
   isLoading: boolean;
-  error: string | null;
+  apiError: string | null;
+  apiOk: boolean;
 
-  login: (dni: string, password: string) => Promise<{ success: boolean; error?: string; user?: StaffUser }>;
+  login: (dni: string, password: string) => Promise<{ success: boolean; error?: string; user?: AuthUser }>;
   logout: () => void;
-  switchCurrentUser: (userId: string) => void;
 
-  getValidBatchesForProduct: (productId: string) => Batch[];
-  getProductTotalStock: (productId: string) => number;
+  products: Product[];
+  productsLoading: boolean;
+  loadProducts: (q?: string, lowStockOnly?: boolean) => Promise<void>;
+  createProduct: (data: any) => Promise<{ success: boolean; error?: string }>;
+  updateProduct: (id: string, data: any) => Promise<{ success: boolean; error?: string }>;
+  deleteProduct: (id: string) => Promise<{ success: boolean; error?: string }>;
+  adjustStock: (data: {
+    productId: string; loteId: string; type: 'ENTRADA' | 'SALIDA' | 'AJUSTE';
+    quantity: number; reason: string;
+  }) => Promise<{ success: boolean; error?: string; stockNuevo?: number }>;
+  getProductStock: (productId: string) => Promise<{ totalStock: number; batches: Batch[] }>;
 
-  executeFefoSale: (params: {
-    cartItems: { product: Product; quantity: number }[];
-    receiptType: ReceiptType;
-    customerName: string;
-    customerDoc: string;
+  batches: Batch[];
+  loadBatches: () => Promise<void>;
+
+  sales: Sale[];
+  salesLoading: boolean;
+  loadSales: (params?: any) => Promise<void>;
+  createSale: (params: {
+    items: { productId: string; quantity: number }[];
     paymentMethod: PaymentMethod;
-    amountPaid: number;
-    notes?: string;
+    amountPaid?: number;
+    customerId?: string;
+    receiptType: ReceiptType;
   }) => Promise<{ success: boolean; sale?: Sale; error?: string }>;
+  getSale: (id: string) => Promise<Sale | null>;
 
-  openCashRegister: (initialFund: number, shift: 'mañana' | 'tarde' | 'noche') => Promise<void>;
-  closeCashRegister: (countedCash: number) => Promise<{ difference: number; summary: CashRegister }>;
+  customers: Customer[];
+  loadCustomers: () => Promise<void>;
+  createCustomer: (data: any) => Promise<{ success: boolean; error?: string }>;
 
-  listSales: () => Promise<void>;
-  listProducts: () => Promise<void>;
-  listBatches: () => Promise<void>;
-  listAlerts: () => Promise<void>;
-  refreshData: () => Promise<void>;
+  alerts: SystemAlert[];
+  pendingAlerts: number;
+  loadAlerts: () => Promise<void>;
+  generateAlerts: () => Promise<{ success: boolean; error?: string; pendingCount?: number }>;
+  resolveAlert: (id: string) => Promise<{ success: boolean; error?: string }>;
+
+  stats: DashboardStats | null;
+  loadStats: () => Promise<void>;
+
+  refreshAll: () => Promise<void>;
 }
 
 const PharmacyContext = createContext<PharmacyContextType | undefined>(undefined);
 
 export const PharmacyProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
+  const [user, setUser] = useState<AuthUser | null>(null);
+  const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [apiError, setApiError] = useState<string | null>(null);
+  const [apiOk, setApiOk] = useState<boolean | null>(null);
+
+  // Recursos
   const [products, setProducts] = useState<Product[]>([]);
+  const [productsLoading, setProductsLoading] = useState<boolean>(false);
   const [batches, setBatches] = useState<Batch[]>([]);
   const [sales, setSales] = useState<Sale[]>([]);
-  const [cashRegister, setCashRegister] = useState<CashRegister>({
-    id: '', isOpen: false, openedAt: '', cashierName: '', shift: 'mañana',
-    initialFund: 0, currentCash: 0, totalSalesCash: 0, totalSalesYape: 0,
-    totalSalesCard: 0, totalInflow: 0, totalOutflow: 0, movements: []
-  });
-  const [suppliers, setSuppliers] = useState<Supplier[]>([]);
-  const [purchaseOrders, setPurchaseOrders] = useState<PurchaseOrder[]>([]);
+  const [salesLoading, setSalesLoading] = useState<boolean>(false);
   const [customers, setCustomers] = useState<Customer[]>([]);
-  const [staffUsers, setStaffUsers] = useState<StaffUser[]>(INITIAL_STAFF);
-  const [currentUser, setCurrentUser] = useState<StaffUser | null>(null);
   const [alerts, setAlerts] = useState<SystemAlert[]>([]);
-  const [isLoggedIn, setIsLoggedIn] = useState<boolean>(false);
-  const [isLoading, setIsLoading] = useState<boolean>(true);
-  const [error, setError] = useState<string | null>(null);
-  const [hasLoaded, setHasLoaded] = useState<boolean>(false);
-  const [initChecked, setInitChecked] = useState<boolean>(false);
+  const [pendingAlerts, setPendingAlerts] = useState<number>(0);
+  const [stats, setStats] = useState<DashboardStats | null>(null);
 
-  // --- AUTENTICACIÓN ---
+  const mapRole = (role: string): UserRole => {
+    const r = String(role || '').toLowerCase();
+    if (r === 'admin') return 'admin';
+    if (r.includes('almac')) return 'almacen';
+    return 'vendedor';
+  };
+
+  // -------- Auth --------
   const login = useCallback(async (dni: string, password: string) => {
     setIsLoading(true);
-    setError(null);
+    setApiError(null);
     try {
       const response = await authApi.login(dni, password);
       if (response.success && response.user && response.token) {
-        const found = staffUsers.find(u => u.dni === dni || u.id === response.user.id);
-        setCurrentUser(found || {
+        const u: AuthUser = {
           id: response.user.id,
-          username: '',
+          dni: response.user.dni,
           name: response.user.name,
-          role: 'cajero',
+          role: mapRole(response.user.role),
           roleTitle: response.user.roleTitle,
-          dni,
-          email: '',
-          allowedTabs: ['pos', 'cash', 'customers', 'alerts'],
-          permissions: {
-            canSell: true, canReceiveBatches: false, canAdjustStock: false,
-            canOpenCloseCash: true, canViewFinancials: false, canManageStaff: false,
-            canSignDigemidReports: false
-          }
-        });
-        setIsLoggedIn(true);
-        return { success: true, user: found || null };
+          isRootAdmin: response.user.isRootAdmin,
+          mustChangePassword: response.user.mustChangePassword
+        };
+        setUser(u);
+        setIsLoading(false);
+        return { success: true, user: u };
       }
       return { success: false, error: response.error || 'Credenciales inválidas' };
     } catch (err: any) {
-      setError(err.message || 'Error al iniciar sesión');
-      return { success: false, error: err.message || 'Error al iniciar sesión' };
-    } finally {
+      const msg = extractError(err, 'Error al iniciar sesión');
+      setApiError(msg);
       setIsLoading(false);
+      return { success: false, error: msg };
     }
-  }, [staffUsers]);
+  }, []);
 
   const logout = useCallback(() => {
     authApi.logout();
-    setCurrentUser(null);
-    setIsLoggedIn(false);
+    setUser(null);
     setProducts([]);
     setBatches([]);
     setSales([]);
+    setCustomers([]);
     setAlerts([]);
+    setPendingAlerts(0);
+    setStats(null);
+    setIsLoading(false);
   }, []);
 
-  const switchCurrentUser = useCallback((userId: string) => {
-    const found = staffUsers.find(u => u.id === userId);
-    if (found) {
-      setCurrentUser(found);
-    }
-  }, [staffUsers]);
-
-  // --- CARGA DE DATOS DESDE API (SOLO si hay usuario autenticado) ---
-  const listProducts = useCallback(async () => {
-    try {
-      const response = await inventoryApi.listProducts();
-      setProducts(response.products || []);
-    } catch (err: any) {
-      setError(err.message);
-    }
-  }, []);
-
-  const listBatches = useCallback(async () => {
-    try {
-      const response = await inventoryApi.listBatches();
-      setBatches(response.batches || []);
-    } catch (err: any) {
-      setError(err.message);
-    }
-  }, []);
-
-  const listSales = useCallback(async () => {
-    try {
-      const response = await salesApi.listSales();
-      setSales(response.sales || []);
-    } catch (err: any) {
-      setError(err.message);
-    }
-  }, []);
-
-  const listAlerts = useCallback(async () => {
-    try {
-      const response = await alertsApi.listAlerts();
-      setAlerts(response.alerts || []);
-    } catch (err: any) {
-      setError(err.message);
-    }
-  }, []);
-
-  const refreshData = useCallback(async () => {
-    await Promise.all([listProducts(), listBatches(), listSales(), listAlerts()]);
-  }, [listProducts, listBatches, listSales, listAlerts]);
-
-  // --- INICIALIZACIÓN: Verificar token existente, luego cargar datos una sola vez ---
+  // Restaurar sesión al montar si hay token y verificar salud del backend
   useEffect(() => {
-    const initializeApp = async () => {
+    setUnauthorizedHandler(() => {
+      setUser(null);
+    });
+
+    healthApi.check()
+      .then(() => setApiOk(true))
+      .catch(() => setApiOk(false));
+
+    const restoreSession = async () => {
       try {
         const token = localStorage.getItem('nova_token');
-        if (token) {
-          // Intentar restaurar sesión desde el backend
-          try {
-            const response = await authApi.me();
-            if (response.user) {
-              const found = staffUsers.find(u => u.id === response.user.id || u.dni === response.user.dni);
-              if (found) {
-                setCurrentUser(found);
-                setIsLoggedIn(true);
-              }
-            }
-          } catch (err) {
-            // Token inválido, limpiar
-            localStorage.removeItem('nova_token');
-            localStorage.removeItem('nova_user');
-            setIsLoggedIn(false);
-          }
+        if (!token) {
+          setIsLoading(false);
+          return;
         }
+        const response = await authApi.me();
+        if (response.user) {
+          setUser({
+            id: response.user.id,
+            dni: response.user.dni,
+            name: response.user.name,
+            role: mapRole(response.user.role),
+            roleTitle: response.user.roleTitle,
+            isRootAdmin: response.user.isRootAdmin,
+            mustChangePassword: response.user.mustChangePassword
+          });
+        }
+      } catch {
+        localStorage.removeItem('nova_token');
+        localStorage.removeItem('nova_user');
       } finally {
-        setInitChecked(true);
         setIsLoading(false);
       }
     };
-
-    initializeApp();
+    restoreSession();
   }, []);
 
-  useEffect(() => {
-    if (initChecked && isLoggedIn && !hasLoaded) {
-      setHasLoaded(true);
-      refreshData().finally(() => {
-        // No cambiar isLoading aquí para no causar re-render innecesario
-      });
+  // -------- Products --------
+  const loadProducts = useCallback(async (q?: string, lowStockOnly = false) => {
+    setProductsLoading(true);
+    try {
+      const response = await inventoryApi.listProducts({ q, solo_bajo_stock: lowStockOnly ? '1' : undefined });
+      const data = (response.products || []).map((p: any) => ({
+        id: p.id,
+        codigo: p.codigo_barras,
+        nombre: p.nombre,
+        generico: p.nombre_generico,
+        categoria: p.categoria,
+        concentracion: p.concentracion,
+        presentacion: p.presentacion,
+        laboratorio: p.laboratorio,
+        precio: parseFloat(p.precio_venta) || 0,
+        costo: parseFloat(p.costo) || 0,
+        stockMinimo: parseInt(p.stock_minimo, 10) || 0,
+        stockTotal: parseInt(p.total_stock, 10) || 0,
+        stockVigente: parseInt(p.total_stock, 10) || 0,
+        lowStock: p.low_stock,
+        requiereReceta: p.requiere_receta === 1,
+        controlado: p.es_controlado === 1,
+        estaActivo: p.esta_activo === 1,
+        fechaActualizacion: p.fecha_actualizacion
+      }));
+      setProducts(data);
+    } catch (err: any) {
+      setApiError(extractError(err, 'Error al cargar productos'));
+    } finally {
+      setProductsLoading(false);
     }
-  }, [initChecked, isLoggedIn, hasLoaded, refreshData]);
+  }, []);
 
-  // --- HELPERS FEFO ---
-  const getValidBatchesForProduct = useCallback((productId: string): Batch[] => {
-    return batches
-      .filter(b => b.productId === productId && b.status === 'active' && b.stock > 0)
-      .sort((a, b) => new Date(a.expirationDate).getTime() - new Date(b.expirationDate).getTime());
-  }, [batches]);
+  const createProduct = useCallback(async (data: any) => {
+    try {
+      await inventoryApi.createProduct(data);
+      await loadProducts();
+      return { success: true };
+    } catch (err: any) {
+      return { success: false, error: extractError(err, 'Error al crear producto') };
+    }
+  }, [loadProducts]);
 
-  const getProductTotalStock = useCallback((productId: string): number => {
-    return getValidBatchesForProduct(productId).reduce((sum, b) => sum + b.stock, 0);
-  }, [getValidBatchesForProduct]);
+  const updateProduct = useCallback(async (id: string, data: any) => {
+    try {
+      await inventoryApi.updateProduct(id, data);
+      await loadProducts();
+      return { success: true };
+    } catch (err: any) {
+      return { success: false, error: extractError(err, 'Error al actualizar producto') };
+    }
+  }, [loadProducts]);
 
-  // --- VENTA FEFO ---
-  const executeFefoSale = useCallback(async (params: {
-    cartItems: { product: Product; quantity: number }[];
-    receiptType: ReceiptType;
-    customerName: string;
-    customerDoc: string;
-    paymentMethod: PaymentMethod;
-    amountPaid: number;
-    notes?: string;
+  const deleteProduct = useCallback(async (id: string) => {
+    try {
+      await inventoryApi.deleteProduct(id);
+      await loadProducts();
+      return { success: true };
+    } catch (err: any) {
+      return { success: false, error: extractError(err, 'Error al eliminar producto') };
+    }
+  }, [loadProducts]);
+
+  const adjustStock = useCallback(async (data: {
+    productId: string; loteId: string; type: 'ENTRADA' | 'SALIDA' | 'AJUSTE';
+    quantity: number; reason: string;
   }) => {
     try {
-      const { cartItems, receiptType, customerName, customerDoc, paymentMethod, amountPaid, notes } = params;
+      const response = await inventoryApi.adjustStock(data);
+      await loadProducts();
+      await loadAlerts();
+      return { success: true, stockNuevo: response.stockNuevo };
+    } catch (err: any) {
+      return { success: false, error: extractError(err, 'Error al ajustar stock') };
+    }
+  }, [loadProducts, loadAlerts]);
 
+  const getProductStock = useCallback(async (productId: string) => {
+    const response = await inventoryApi.getProductStock(productId);
+    return {
+      totalStock: response.totalStock,
+      batches: (response.batches || []).map((b: any) => ({
+        id: b.id,
+        productId: b.producto_id,
+        codigoLote: b.codigo_lote,
+        fechaVencimiento: b.fecha_vencimiento,
+        stock: parseInt(b.stock_actual, 10) || 0,
+        estado: b.estado
+      }))
+    };
+  }, []);
+
+  // -------- Batches --------
+  const loadBatches = useCallback(async () => {
+    try {
+      const response = await inventoryApi.listBatches();
+      setBatches((response.batches || []).map((b: any) => ({
+        id: b.id,
+        productId: b.producto_id,
+        codigoLote: b.codigo_lote,
+        fechaVencimiento: b.fecha_vencimiento,
+        stock: parseInt(b.stock_actual, 10) || 0,
+        estado: b.estado
+      })));
+    } catch (err: any) {
+      setApiError(extractError(err, 'Error al cargar lotes'));
+    }
+  }, []);
+
+  // -------- Sales --------
+  const loadSales = useCallback(async (params?: any) => {
+    setSalesLoading(true);
+    try {
+      const response = await salesApi.listSales(params);
+      const data = (response.sales || []).map((s: any) => ({
+        id: s.id,
+        codigoVenta: s.codigo_venta,
+        fecha: s.fecha_creacion,
+        cliente: s.cliente || null,
+        clienteDoc: s.cliente_doc || null,
+        cajero: s.cajero,
+        cajeroId: s.cajero_id || user?.id,
+        metodoPago: s.metodo_pago,
+        subtotal: parseFloat(s.subtotal) || 0,
+        igv: parseFloat(s.monto_igv) || 0,
+        total: parseFloat(s.monto_total) || 0,
+        items: []
+      }));
+      setSales(data);
+      return { page: response.page, limit: response.limit, total: response.total };
+    } catch (err: any) {
+      setApiError(extractError(err, 'Error al cargar ventas'));
+      return { page: 1, limit: 50, total: 0 };
+    } finally {
+      setSalesLoading(false);
+    }
+  }, [user]);
+
+  const createSale = useCallback(async (params: {
+    items: { productId: string; quantity: number }[];
+    paymentMethod: PaymentMethod;
+    amountPaid?: number;
+    customerId?: string;
+    receiptType: ReceiptType;
+  }) => {
+    try {
       const response = await salesApi.createSale({
-        items: cartItems.map(item => ({
-          productId: item.product.id,
-          quantity: item.quantity
-        })),
-        paymentMethod,
-        amountPaid,
-        customerDoc,
-        receiptType
+        items: params.items,
+        paymentMethod: params.paymentMethod,
+        amountPaid: params.amountPaid,
+        customerId: params.customerId || null,
+        receiptType: params.receiptType
       });
-
       if (response.success && response.sale) {
-        await refreshData();
-        return { success: true, sale: response.sale };
+        await loadSales();
+        await loadProducts();
+        await loadAlerts();
+        await loadStats();
+        return { success: true, sale: mapSale(response.sale) };
       }
       return { success: false, error: response.error || 'Error al procesar la venta' };
     } catch (err: any) {
-      return { success: false, error: err.message || 'Error al procesar la venta' };
+      return { success: false, error: extractError(err, 'Error al procesar la venta') };
     }
-  }, [salesApi, refreshData]);
+  }, [loadSales, loadProducts, loadAlerts, loadStats]);
 
-  // --- CAJA ---
-  const openCashRegister = useCallback(async (initialFund: number, shift: 'mañana' | 'tarde' | 'noche') => {
+  const getSale = useCallback(async (id: string): Promise<Sale | null> => {
     try {
-      const response = await cashApi.openCashRegister(initialFund, shift);
-      if (response.success && response.cashRegister) {
-        setCashRegister(response.cashRegister);
-      }
-    } catch (err: any) {
-      setError(err.message);
+      const response = await salesApi.getSale(id);
+      return mapSale(response.sale);
+    } catch {
+      return null;
     }
-  }, [cashApi]);
+  }, []);
 
-  const closeCashRegister = useCallback(async (countedCash: number) => {
+  const mapSale = (s: any): Sale => ({
+    id: s.id,
+    codigoVenta: s.codigo_venta,
+    fecha: s.fecha_creacion,
+    cliente: s.cliente || null,
+    clienteDoc: s.cliente_doc || null,
+    clienteId: s.cliente_id || undefined,
+    cajero: s.cajero,
+    cajeroId: s.cajero_id,
+    metodoPago: s.metodo_pago,
+    subtotal: parseFloat(s.subtotal) || 0,
+    igv: parseFloat(s.igv !== undefined ? s.igv : s.monto_igv) || 0,
+    total: parseFloat(s.total !== undefined ? s.total : s.monto_total) || 0,
+    items: (s.items || []).map((it: any) => ({
+      id: it.id,
+      productId: it.productId || it.producto_id,
+      productName: it.productName || it.producto,
+      codigo: it.codigo || it.codigo_barras,
+      unitPrice: parseFloat(it.unitPrice) || 0,
+      quantity: parseInt(it.quantity, 10) || 0,
+      subtotal: parseFloat(it.subtotal) || 0,
+      batches: (it.batches || []).map((b: any) => ({
+        loteId: b.lote_id,
+        codigoLote: b.codigoLote || b.codigo_lote,
+        fechaVencimiento: b.fechaVencimiento || b.fecha_vencimiento,
+        cantidad: parseInt(b.cantidad, 10) || 0
+      }))
+    }))
+  });
+
+  // -------- Customers --------
+  const loadCustomers = useCallback(async () => {
     try {
-      const response = await cashApi.closeCashRegister(countedCash);
-      return { difference: 0, summary: cashRegister };
+      const response = await customersApi.listCustomers();
+      setCustomers((response.customers || []).map((c: any) => ({
+        id: c.id,
+        tipoDocumento: c.tipo_documento,
+        numeroDocumento: c.numero_documento,
+        nombreCompleto: c.nombre_completo,
+        telefono: c.telefono,
+        correo: c.correo,
+        direccion: c.direccion
+      })));
     } catch (err: any) {
-      setError(err.message);
-      return { difference: 0, summary: cashRegister };
+      setApiError(extractError(err, 'Error al cargar clientes'));
     }
-  }, [cashApi, cashRegister]);
+  }, []);
 
-  const contextValue: PharmacyContextType = useMemo(() => ({
-    products,
-    batches,
-    sales,
-    cashRegister,
-    suppliers,
-    purchaseOrders,
-    customers,
-    staffUsers,
-    currentUser,
-    alerts,
-    isLoggedIn,
+  const createCustomer = useCallback(async (data: any) => {
+    try {
+      const response = await customersApi.createCustomer({
+        docType: data.tipoDocumento || 'DNI',
+        docNumber: data.numeroDocumento,
+        fullName: data.nombreCompleto,
+        phone: data.telefono,
+        email: data.correo,
+        address: data.direccion
+      });
+      await loadCustomers();
+      return { success: true, customerId: response.customerId };
+    } catch (err: any) {
+      return { success: false, error: extractError(err, 'Error al crear cliente') };
+    }
+  }, [loadCustomers]);
+
+  // -------- Alerts --------
+  const loadAlerts = useCallback(async () => {
+    try {
+      const response = await alertsApi.listAlerts();
+      setAlerts((response.alerts || []).map((a: any) => ({
+        id: a.id,
+        tipo: a.tipo_alerta,
+        estado: a.estado,
+        mensaje: a.mensaje,
+        productoId: a.producto_id,
+        producto: a.producto,
+        codigoBarras: a.codigo_barras,
+        loteId: a.lote_id,
+        codigoLote: a.codigo_lote,
+        fechaVencimiento: a.fecha_vencimiento,
+        fechaCreacion: a.fecha_creacion,
+        resueltoPor: a.resuelto_por
+      })));
+      const count = await alertsApi.countAlerts();
+      setPendingAlerts(count.pendingCount);
+    } catch (err: any) {
+      setApiError(extractError(err, 'Error al cargar alertas'));
+    }
+  }, []);
+
+  const generateAlerts = useCallback(async () => {
+    try {
+      const response = await alertsApi.generateAlerts();
+      await loadAlerts();
+      return { success: true, pendingCount: response.pendingCount };
+    } catch (err: any) {
+      return { success: false, error: extractError(err, 'Error al generar alertas') };
+    }
+  }, [loadAlerts]);
+
+  const resolveAlert = useCallback(async (id: string) => {
+    try {
+      await alertsApi.resolveAlert(id);
+      await loadAlerts();
+      return { success: true };
+    } catch (err: any) {
+      return { success: false, error: extractError(err, 'Error al resolver alerta') };
+    }
+  }, [loadAlerts]);
+
+  // -------- Dashboard stats --------
+  const loadStats = useCallback(async () => {
+    try {
+      const response = await dashboardApi.getStats();
+      setStats(response);
+    } catch (err: any) {
+      setApiError(extractError(err, 'Error al cargar el panel de control'));
+    }
+  }, []);
+
+  const refreshAll = useCallback(async () => {
+    await Promise.all([
+      loadProducts(),
+      loadBatches(),
+      loadSales(),
+      loadCustomers(),
+      loadAlerts(),
+      loadStats()
+    ]);
+  }, [loadProducts, loadBatches, loadSales, loadCustomers, loadAlerts, loadStats]);
+
+  // Carga inicial de datos tras autenticación
+  useEffect(() => {
+    if (user) {
+      refreshAll();
+      // Re-verificar alertas periódicamente (cada 2 min) mientras se usa el sistema
+      const timer = setInterval(() => {
+        loadAlerts().catch(() => {});
+        loadStats().catch(() => {});
+      }, 120000);
+      return () => clearInterval(timer);
+    }
+  }, [user, refreshAll, loadAlerts, loadStats]);
+
+  const isAuthenticated = !!user;
+
+  const contextValue = useMemo(() => ({
+    user,
+    isAuthenticated,
     isLoading,
-    error,
+    apiError,
+    apiOk,
     login,
     logout,
-    switchCurrentUser,
-    getValidBatchesForProduct,
-    getProductTotalStock,
-    executeFefoSale,
-    openCashRegister,
-    closeCashRegister,
-    listSales,
-    listProducts,
-    listBatches,
-    listAlerts,
-    refreshData
+    products,
+    productsLoading,
+    loadProducts,
+    createProduct,
+    updateProduct,
+    deleteProduct,
+    adjustStock,
+    getProductStock,
+    batches,
+    loadBatches,
+    sales,
+    salesLoading,
+    loadSales,
+    createSale,
+    getSale,
+    customers,
+    loadCustomers,
+    createCustomer,
+    alerts,
+    pendingAlerts,
+    loadAlerts,
+    generateAlerts,
+    resolveAlert,
+    stats,
+    loadStats,
+    refreshAll
   }), [
-    products, batches, sales, cashRegister, suppliers, purchaseOrders,
-    customers, staffUsers, currentUser, alerts,
-    isLoggedIn, isLoading, error,
-    login, logout, switchCurrentUser,
-    getValidBatchesForProduct, getProductTotalStock,
-    executeFefoSale, openCashRegister, closeCashRegister,
-    listSales, listProducts, listBatches, listAlerts, refreshData
+    user, isLoading, apiError, apiOk,
+    login, logout,
+    products, productsLoading, loadProducts, createProduct, updateProduct, deleteProduct, adjustStock, getProductStock,
+    batches, loadBatches,
+    sales, salesLoading, loadSales, createSale, getSale,
+    customers, loadCustomers, createCustomer,
+    alerts, pendingAlerts, loadAlerts, generateAlerts, resolveAlert,
+    stats, loadStats, refreshAll
   ]);
 
   return (

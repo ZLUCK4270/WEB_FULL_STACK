@@ -26,7 +26,7 @@ async function getBackupData() {
 
   const backup = {};
   for (const table of tables) {
-    const result = await pool.request().query(`SELECT * FROM ${table}`);
+    const result = await pool.request().query(`SELECT * FROM [${table}]`);
     backup[table] = result.recordset;
   }
 

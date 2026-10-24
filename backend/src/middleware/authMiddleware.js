@@ -8,7 +8,12 @@ function authenticateToken(req, res, next) {
     return res.status(401).json({ error: 'Token de acceso requerido' });
   }
 
-  jwt.verify(token, process.env.JWT_SECRET || 'nova_salud_secreto_curso_2026', (err, user) => {
+  const secret = process.env.JWT_SECRET;
+  if (!secret) {
+    return res.status(500).json({ error: 'Configuración de servidor incompleta: JWT_SECRET no definido' });
+  }
+
+  jwt.verify(token, secret, (err, user) => {
     if (err) {
       return res.status(403).json({ error: 'Token inválido o expirado' });
     }

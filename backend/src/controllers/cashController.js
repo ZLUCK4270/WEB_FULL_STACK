@@ -1,28 +1,32 @@
 const { getPool } = require('../config/db');
+const { v4: uuidv4 } = require('uuid');
 
 async function openCashRegister(req, res) {
   try {
-    const { initialFund, shift } = req.body;
+    const { initialFund, shift = 'MAÑANA' } = req.body;
     const cashierId = req.user.id;
+    const registerId = uuidv4();
 
     const pool = await getPool();
-    const result = await pool.request()
-      .input('cashierId', cashierId)
-      .input('initialFund', initialFund)
-      .input('shift', shift)
+    await pool.request()
+      .input('usuarioId', cashierId)
+      .input('accion', 'OPEN_CASH_REGISTER')
+      .input('modulo', 'cash_register')
+      .input('tablaAfectada', 'registros_auditoria_sistema')
+      .input('registroId', registerId)
+      .input('datosNuevos', JSON.stringify({ initialFund: parseFloat(initialFund) || 0, shift }))
       .query(`
-        INSERT INTO movimientos_stock (producto_id, usuario_id, tipo_movimiento, cantidad, stock_anterior, stock_nuevo, motivo, referencia_id)
-        OUTPUT INSERTED.id
-        VALUES (NULL, @cashierId, 'ENTRADA_COMPRA', 0, 0, 0, 'Apertura de caja fondo inicial', NULL)
+        INSERT INTO registros_auditoria_sistema (usuario_id, accion, modulo, tabla_afectada, registro_id, datos_nuevos)
+        VALUES (@usuarioId, @accion, @modulo, @tablaAfectada, @registroId, @datosNuevos)
       `);
 
     res.status(201).json({
       success: true,
       cashRegister: {
-        id: result.recordset[0].id,
+        id: registerId,
         cashierId,
-        initialFund,
-        currentCash: initialFund,
+        initialFund: parseFloat(initialFund) || 0,
+        currentCash: parseFloat(initialFund) || 0,
         shift,
         isOpen: true,
         openedAt: new Date().toISOString()
@@ -36,7 +40,21 @@ async function openCashRegister(req, res) {
 async function closeCashRegister(req, res) {
   try {
     const { countedCash } = req.body;
-    res.json({ success: true, countedCash, message: 'Caja cerrada (implementar arqueo completo)' });
+    const cashierId = req.user.id;
+    const pool = await getPool();
+
+    await pool.request()
+      .input('usuarioId', cashierId)
+      .input('accion', 'CLOSE_CASH_REGISTER')
+      .input('modulo', 'cash_register')
+      .input('tablaAfectada', 'registros_auditoria_sistema')
+      .input('datosNuevos', JSON.stringify({ countedCash: parseFloat(countedCash) || 0 }))
+      .query(`
+        INSERT INTO registros_auditoria_sistema (usuario_id, accion, modulo, tabla_afectada, registro_id, datos_nuevos)
+        VALUES (@usuarioId, @accion, @modulo, @tablaAfectada, NULL, @datosNuevos)
+      `);
+
+    res.json({ success: true, countedCash, message: 'Caja cerrada y arqueo registrado en auditoría' });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }

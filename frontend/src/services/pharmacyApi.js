@@ -1,11 +1,9 @@
 import api from './api';
 
 /**
- * Servicio de API para Nova Salud - Backend Node.js + Express + SQL Server
- * Reemplaza la lógica en memoria de PharmacyContext con llamadas REST reales.
+ * Capa de servicios Nova Salud. Todas las peticiones van al backend Node.js + SQL Server.
+ * Los errores se propagan; el componente llama a extractError() para mostrar el mensaje.
  */
-
-// ==================== AUTENTICACIÓN ====================
 
 export const authApi = {
   login: async (dni, password) => {
@@ -17,9 +15,12 @@ export const authApi = {
     return response.data;
   },
   logout: async () => {
-    localStorage.removeItem('nova_token');
-    localStorage.removeItem('nova_user');
-    await api.post('/auth/logout');
+    try {
+      await api.post('/auth/logout');
+    } finally {
+      localStorage.removeItem('nova_token');
+      localStorage.removeItem('nova_user');
+    }
     return { success: true };
   },
   me: async () => {
@@ -28,24 +29,36 @@ export const authApi = {
   }
 };
 
-// ==================== VENTAS (POS) ====================
-
 export const salesApi = {
   createSale: async (saleData) => {
     const response = await api.post('/sales', saleData);
     return response.data;
   },
-  listSales: async () => {
-    const response = await api.get('/sales');
+  listSales: async (params = {}) => {
+    const response = await api.get('/sales', { params });
+    return response.data;
+  },
+  getSale: async (id) => {
+    const response = await api.get(`/sales/${id}`);
     return response.data;
   }
 };
 
-// ==================== INVENTARIO ====================
-
 export const inventoryApi = {
-  listProducts: async () => {
-    const response = await api.get('/inventory/products');
+  listProducts: async (params = {}) => {
+    const response = await api.get('/inventory/products', { params });
+    return response.data;
+  },
+  createProduct: async (data) => {
+    const response = await api.post('/inventory/products', data);
+    return response.data;
+  },
+  updateProduct: async (id, data) => {
+    const response = await api.put(`/inventory/products/${id}`, data);
+    return response.data;
+  },
+  deleteProduct: async (id) => {
+    const response = await api.delete(`/inventory/products/${id}`);
     return response.data;
   },
   listBatches: async () => {
@@ -55,58 +68,31 @@ export const inventoryApi = {
   getProductStock: async (productId) => {
     const response = await api.get(`/inventory/products/${productId}/stock`);
     return response.data;
-  }
-};
-
-// ==================== CAJA ====================
-
-export const cashApi = {
-  openCashRegister: async (initialFund, shift) => {
-    const response = await api.post('/cash/open', { initialFund, shift });
-    return response.data;
   },
-  closeCashRegister: async (countedCash) => {
-    const response = await api.post('/cash/close', { countedCash });
+  adjustStock: async (data) => {
+    const response = await api.post('/inventory/adjust-stock', data);
     return response.data;
   }
 };
-
-// ==================== ALERTAS ====================
 
 export const alertsApi = {
-  listAlerts: async () => {
-    const response = await api.get('/alerts');
-    return response.data;
-  }
-};
-
-// ==================== AUDITORÍA ====================
-
-export const auditApi = {
-  listAuditLogs: async () => {
-    const response = await api.get('/audit');
-    return response.data;
-  }
-};
-
-// ==================== COMPRAS ====================
-
-export const purchasesApi = {
-  listPurchases: async () => {
-    const response = await api.get('/purchases');
+  listAlerts: async (params = {}) => {
+    const response = await api.get('/alerts', { params });
     return response.data;
   },
-  createPurchase: async (purchaseData) => {
-    const response = await api.post('/purchases', purchaseData);
+  countAlerts: async () => {
+    const response = await api.get('/alerts/count');
     return response.data;
   },
-  receivePurchase: async (purchaseId) => {
-    const response = await api.post(`/purchases/${purchaseId}/receive`);
+  generateAlerts: async () => {
+    const response = await api.post('/alerts/generate');
+    return response.data;
+  },
+  resolveAlert: async (id) => {
+    const response = await api.patch(`/alerts/${id}/resolve`);
     return response.data;
   }
 };
-
-// ==================== CLIENTES ====================
 
 export const customersApi = {
   listCustomers: async () => {
@@ -123,24 +109,12 @@ export const customersApi = {
   }
 };
 
-// ==================== RESPALDOS ====================
-
-export const backupApi = {
-  listBackups: async () => {
-    const response = await api.get('/backups');
-    return response.data;
-  },
-  createBackup: async (backupData) => {
-    const response = await api.post('/backups', backupData);
-    return response.data;
-  },
-  restoreBackup: async (payloadJson) => {
-    const response = await api.post('/backups/restore', { payloadJson });
+export const dashboardApi = {
+  getStats: async () => {
+    const response = await api.get('/dashboard/stats');
     return response.data;
   }
 };
-
-// ==================== SALUD DEL SERVIDOR ====================
 
 export const healthApi = {
   check: async () => {
@@ -153,11 +127,8 @@ export default {
   auth: authApi,
   sales: salesApi,
   inventory: inventoryApi,
-  cash: cashApi,
   alerts: alertsApi,
-  audit: auditApi,
-  purchases: purchasesApi,
   customers: customersApi,
-  backup: backupApi,
+  dashboard: dashboardApi,
   health: healthApi
 };

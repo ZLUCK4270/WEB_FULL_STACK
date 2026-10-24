@@ -1,6 +1,27 @@
 const { getPool } = require('../config/db');
 const { v4: uuidv4 } = require('uuid');
 
+const ALLOWED_TABLES = [
+  'modulos_sistema',
+  'categorias',
+  'laboratorios',
+  'proveedores',
+  'perfiles_usuario',
+  'permisos_usuario',
+  'productos',
+  'clientes',
+  'lotes',
+  'movimientos_stock',
+  'ventas',
+  'items_venta',
+  'items_venta_lotes',
+  'compras',
+  'items_compra',
+  'alertas_stock',
+  'sugerencias_reposicion',
+  'registros_auditoria_sistema'
+];
+
 async function listBackups(req, res) {
   try {
     // Los respaldos se almacenan en memoria del servicio, aquí devolvemos una lista vacía
@@ -34,8 +55,9 @@ async function createBackup(req, res) {
     let totalRecords = 0;
 
     for (const table of tables) {
+      if (!ALLOWED_TABLES.includes(table)) continue;
       try {
-        const result = await pool.request().query(`SELECT * FROM ${table}`);
+        const result = await pool.request().query(`SELECT * FROM [${table}]`);
         backupData[table] = result.recordset;
         totalRecords += result.recordset.length;
       } catch (e) {
@@ -122,23 +144,24 @@ async function restoreBackup(req, res) {
       ];
 
       for (const table of restoreOrder) {
+        if (!ALLOWED_TABLES.includes(table)) continue;
         if (data[table] && Array.isArray(data[table])) {
-          // Limpiar tabla existente
-          await transaction.request().query(`DELETE FROM ${table}`);
+          // Limpiar tabla existente usando identificador seguro
+          await transaction.request().query(`DELETE FROM [${table}]`);
 
-          // Insertar datos
+          // Insertar datos con columnas sanitizadas
           for (const row of data[table]) {
-            const columns = Object.keys(row).filter(k => row[k] !== undefined);
+            // Permitir únicamente identificadores alfanuméricos válidos
+            const columns = Object.keys(row).filter(k => /^[a-zA-Z_][a-zA-Z0-9_]*$/.test(k) && row[k] !== undefined);
             if (columns.length === 0) continue;
 
-            const params = columns.map((c, i) => `@p${i}`).join(', ');
-            const assigns = columns.map((c, i) => `${c} = @p${i}`).join(', ');
-            const values = columns.map((c, i) => row[c]);
+            const escapedCols = columns.map(c => `[${c}]`).join(', ');
+            const params = columns.map((_, i) => `@p${i}`).join(', ');
 
             const request = transaction.request();
-            columns.forEach((c, i) => request.input(`p${i}`, values[c]));
+            columns.forEach((c, i) => request.input(`p${i}`, row[c]));
 
-            await request.query(`INSERT INTO ${table} (${columns.join(', ')}) VALUES (${params})`);
+            await request.query(`INSERT INTO [${table}] (${escapedCols}) VALUES (${params})`);
           }
         }
       }
