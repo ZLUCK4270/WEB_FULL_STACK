@@ -269,8 +269,8 @@ export const InventoryBatchesView: React.FC = () => {
                 const nb = nearestBatch(p.id);
                 const isExpanded = expandedProduct === p.id;
                 return (
-                  <>
-                    <tr key={p.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/40 transition group">
+                  <React.Fragment key={p.id}>
+                    <tr className="hover:bg-slate-50 dark:hover:bg-slate-800/40 transition group">
                     <td className="px-4 py-3 font-mono font-bold text-slate-700 dark:text-slate-300">{p.codigo}</td>
                     <td className="px-4 py-3 text-slate-900 dark:text-white font-medium">
                       {p.nombre}
@@ -391,16 +391,17 @@ export const InventoryBatchesView: React.FC = () => {
                       </td>
                     </tr>
                   )}
-                  </>
-                )
-              )}
+                  </React.Fragment>
+                );
+              })
+            )}
           </tbody>
         </table>
       </div>
 
       {/* Modal: Nuevo producto */}
       {isProductModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-xs animate-in fade-in">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-sm animate-in fade-in">
           <div className="bg-white dark:bg-slate-900 rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-200 dark:border-slate-800 space-y-4">
             <div className="flex items-center justify-between pb-2 border-b border-slate-100 dark:border-slate-800">
               <h3 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
@@ -461,7 +462,7 @@ export const InventoryBatchesView: React.FC = () => {
 
       {/* Modal: Editar producto */}
       {isEditModalOpen && editingProduct && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-xs animate-in fade-in">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-sm animate-in fade-in">
           <div className="bg-white dark:bg-slate-900 rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-200 dark:border-slate-800 space-y-4">
             <div className="flex items-center justify-between pb-2 border-b border-slate-100 dark:border-slate-800">
               <h3 className="text-base font-bold text-slate-900 dark:text-white">Editar {editingProduct.nombre}</h3>
@@ -502,7 +503,7 @@ export const InventoryBatchesView: React.FC = () => {
 
       {/* Modal: Ajuste de stock */}
       {isAdjustModalOpen && adjustTarget && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-xs animate-in fade-in">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-sm animate-in fade-in">
           <div className="bg-white dark:bg-slate-900 rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-200 dark:border-slate-800 space-y-4">
             <div className="flex items-center justify-between pb-2 border-b border-slate-100 dark:border-slate-800">
               <h3 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">

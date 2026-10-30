@@ -254,6 +254,31 @@ export const PharmacyProvider: React.FC<{ children: ReactNode }> = ({ children }
     }
   }, [loadProducts]);
 
+  // -------- Alerts --------
+  const loadAlerts = useCallback(async () => {
+    try {
+      const response = await alertsApi.listAlerts();
+      setAlerts((response.alerts || []).map((a: any) => ({
+        id: a.id,
+        tipo: a.tipo_alerta,
+        estado: a.estado,
+        mensaje: a.mensaje,
+        productoId: a.producto_id,
+        producto: a.producto,
+        codigoBarras: a.codigo_barras,
+        loteId: a.lote_id,
+        codigoLote: a.codigo_lote,
+        fechaVencimiento: a.fecha_vencimiento,
+        fechaCreacion: a.fecha_creacion,
+        resueltoPor: a.resuelto_por
+      })));
+      const count = await alertsApi.countAlerts();
+      setPendingAlerts(count.pendingCount);
+    } catch (err: any) {
+      setApiError(extractError(err, 'Error al cargar alertas'));
+    }
+  }, []);
+
   const adjustStock = useCallback(async (data: {
     productId: string; loteId: string; type: 'ENTRADA' | 'SALIDA' | 'AJUSTE';
     quantity: number; reason: string;
@@ -431,31 +456,7 @@ export const PharmacyProvider: React.FC<{ children: ReactNode }> = ({ children }
     }
   }, [loadCustomers]);
 
-  // -------- Alerts --------
-  const loadAlerts = useCallback(async () => {
-    try {
-      const response = await alertsApi.listAlerts();
-      setAlerts((response.alerts || []).map((a: any) => ({
-        id: a.id,
-        tipo: a.tipo_alerta,
-        estado: a.estado,
-        mensaje: a.mensaje,
-        productoId: a.producto_id,
-        producto: a.producto,
-        codigoBarras: a.codigo_barras,
-        loteId: a.lote_id,
-        codigoLote: a.codigo_lote,
-        fechaVencimiento: a.fecha_vencimiento,
-        fechaCreacion: a.fecha_creacion,
-        resueltoPor: a.resuelto_por
-      })));
-      const count = await alertsApi.countAlerts();
-      setPendingAlerts(count.pendingCount);
-    } catch (err: any) {
-      setApiError(extractError(err, 'Error al cargar alertas'));
-    }
-  }, []);
-
+  // -------- Alerts Actions --------
   const generateAlerts = useCallback(async () => {
     try {
       const response = await alertsApi.generateAlerts();

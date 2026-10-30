@@ -34,7 +34,7 @@ function defaultTabFor(role: string | undefined): TabId {
 }
 
 export const DashboardShell: React.FC = () => {
-  const { user, logout, pendingAlerts } = usePharmacy();
+  const { user, isLoading, logout, pendingAlerts } = usePharmacy();
   const [activeTab, setActiveTab] = useState<TabId>('dashboard');
   const [isSidebarOpen, setIsSidebarOpen] = useState<boolean>(false);
   const [isSearchOpen, setIsSearchOpen] = useState<boolean>(false);
@@ -46,6 +46,15 @@ export const DashboardShell: React.FC = () => {
       setActiveTab(defaultTabFor(user.role));
     }
   }, [user, allowedTabs, activeTab]);
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center p-4">
+        <div className="w-10 h-10 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin mb-4" />
+        <p className="text-slate-400 text-sm font-medium">Iniciando Botica Nova Salud...</p>
+      </div>
+    );
+  }
 
   if (!user) {
     return <LoginView />;

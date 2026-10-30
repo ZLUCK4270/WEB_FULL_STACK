@@ -299,7 +299,7 @@ export const SalesHistoryView: React.FC = () => {
                     {(selectedSale.items || []).map((item, idx) => (
                       <div
                         key={item.id || idx}
-                        className="p-3 bg-white dark:bg-slate-850 rounded-xl border border-slate-200 dark:border-slate-800"
+                        className="p-3 bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-800"
                       >
                         <div className="flex items-center justify-between text-sm mb-1.5">
                           <div>

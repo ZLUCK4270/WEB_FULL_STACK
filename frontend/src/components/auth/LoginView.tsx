@@ -110,7 +110,7 @@ export const LoginView: React.FC = () => {
                     setErrorMessage(null);
                   }}
                   placeholder="Ingrese su DNI"
-                  className="w-full pl-10 pr-4 py-3 rounded-xl border border-slate-700/80 bg-slate-950 text-white text-sm placeholder:text-slate-500 focus:outline-hidden focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 font-medium transition"
+                  className="w-full pl-10 pr-4 py-3 rounded-xl border border-slate-700/80 bg-slate-950 text-white text-sm placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 font-medium transition"
                 />
               </div>
             </div>
@@ -131,7 +131,7 @@ export const LoginView: React.FC = () => {
                     setErrorMessage(null);
                   }}
                   placeholder="••••••••"
-                  className="w-full pl-10 pr-11 py-3 rounded-xl border border-slate-700/80 bg-slate-950 text-white text-sm placeholder:text-slate-500 focus:outline-hidden focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 font-medium transition"
+                  className="w-full pl-10 pr-11 py-3 rounded-xl border border-slate-700/80 bg-slate-950 text-white text-sm placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 font-medium transition"
                 />
                 <button
                   type="button"
