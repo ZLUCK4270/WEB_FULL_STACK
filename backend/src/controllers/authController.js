@@ -70,16 +70,24 @@ async function login(req, res) {
     const role = mapRole(user.cargo, user.es_administrador_raiz);
     const isRootAdmin = user.es_administrador_raiz === 1 || user.es_administrador_raiz === true;
 
+    const userPayload = {
+      id: user.id,
+      dni: user.dni,
+      nombre: user.nombre,
+      apellido: user.apellido,
+      name: `${user.nombre} ${user.apellido}`.trim(),
+      cargo: user.cargo,
+      roleTitle: user.cargo,
+      role,
+      rol: role,
+      isRootAdmin,
+      is_root_admin: isRootAdmin,
+      esAdministradorRaiz: isRootAdmin,
+      mustChangePassword: user.debe_cambiar_clave === 1
+    };
+
     const token = jwt.sign(
-      {
-        id: user.id,
-        dni: user.dni,
-        nombre: user.nombre,
-        apellido: user.apellido,
-        cargo: user.cargo,
-        role,
-        esAdministradorRaiz: isRootAdmin
-      },
+      userPayload,
       JWT_SECRET,
       { expiresIn: JWT_EXPIRES_IN }
     );
@@ -96,15 +104,7 @@ async function login(req, res) {
     res.json({
       success: true,
       token,
-      user: {
-        id: user.id,
-        dni: user.dni,
-        name: `${user.nombre} ${user.apellido}`,
-        role,
-        roleTitle: user.cargo,
-        isRootAdmin,
-        mustChangePassword: user.debe_cambiar_clave === 1
-      }
+      user: userPayload
     });
   } catch (error) {
     console.error(error);

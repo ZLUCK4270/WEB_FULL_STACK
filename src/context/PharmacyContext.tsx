@@ -482,7 +482,7 @@ export const PharmacyProvider: React.FC<{ children: ReactNode }> = ({ children }
   const loadAlerts = useCallback(async () => {
     try {
       const [alertsRes, countRes] = await Promise.all([
-        alertsApi.listAlerts({ estado: 'PENDIENTE' }),
+        alertsApi.listAlerts({ estado: 'ALL' }),
         alertsApi.countAlerts()
       ]);
       const mapped: SystemAlert[] = (alertsRes.alerts || []).map((a: any) => ({
@@ -770,7 +770,7 @@ export const PharmacyProvider: React.FC<{ children: ReactNode }> = ({ children }
         fechaFactura: p.fecha_factura,
         fechaCreacion: p.fecha_creacion,
         estado: p.estado,
-        items: []
+        items: (p.items || []).map((it: any) => ({ id: it.id, productoId: it.producto_id || it.productoId, productoNombre: it.productoNombre || it.producto_nombre, codigoBarras: it.codigoBarras || it.codigo_barras, cantidad: parseInt(it.cantidad, 10) || 0, cantidadRecibida: parseInt(it.cantidad_recibida ?? it.cantidadRecibida ?? 0, 10) || 0, precioUnitario: parseFloat(it.precio_unitario ?? it.costoUnitario ?? 0) || 0, subtotal: parseFloat(it.subtotal) || 0 }))
       })));
     } catch (err: any) {
       console.warn('Error loading purchases:', err);
@@ -794,6 +794,7 @@ export const PharmacyProvider: React.FC<{ children: ReactNode }> = ({ children }
       await purchasesApi.receivePurchase(id, receivedItems);
       await Promise.all([
         loadPurchases(),
+      loadReplenishmentSuggestions(),
         loadProducts(),
         loadBatches(),
         loadAlerts(),
@@ -889,7 +890,8 @@ export const PharmacyProvider: React.FC<{ children: ReactNode }> = ({ children }
       loadAlerts(),
       loadStats(),
       loadCurrentShift(),
-      loadPurchases()
+      loadPurchases(),
+      loadReplenishmentSuggestions()
     ]);
   }, [loadCatalog, loadProducts, loadBatches, loadSales, loadCustomers, loadAlerts, loadStats, loadCurrentShift, loadPurchases]);
 

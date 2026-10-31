@@ -81,15 +81,21 @@ async function getStats(req, res) {
 
     // Alertas pendientes (contador rápido para el dashboard)
     const alertCountResult = await pool.request().query(`SELECT COUNT(*) AS c FROM alertas_stock WHERE estado = 'PENDIENTE'`);
+    const pendingAlertsCount = parseInt(alertCountResult.recordset[0]?.c ?? alertCountResult.recordset[0]?.pendingCount ?? 0, 10) || 0;
 
-    res.json({
+    const payload = {
       salesToday,
       lowStockCount: lowStock.length,
       lowStock,
       expiringSoonCount: expiringSoon.length,
       expiringSoon,
       topProducts,
-      pendingAlerts: parseInt(alertCountResult.recordset[0].c, 10) || 0
+      pendingAlerts: pendingAlertsCount
+    };
+
+    res.json({
+      stats: payload,
+      ...payload
     });
   } catch (error) {
     res.status(500).json({ error: error.message });

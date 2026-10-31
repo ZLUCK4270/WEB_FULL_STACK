@@ -1,4 +1,4 @@
-const { getPool, sql, mockTables, evaluateAlerts } = require('../config/db');
+const { getPool, mockTables, evaluateAlerts } = require('../config/db');
 const { v4: uuidv4 } = require('uuid');
 
 async function listPurchases(req, res) {
@@ -48,7 +48,6 @@ async function createPurchase(req, res) {
 
     const pool = await getPool();
 
-    // Recalcular montos en el servidor (no confiar en montos enviados por el cliente)
     let calculatedTotal = 0;
     const sanitizedItems = [];
 
@@ -58,7 +57,8 @@ async function createPurchase(req, res) {
         return res.status(400).json({ error: `Producto no encontrado: ${item.productId}` });
       }
       const qty = parseInt(item.quantity, 10);
-      const price = parseFloat(item.unitPrice !== undefined ? item.unitPrice : prod.costo);
+      const rawPrice = item.unitPrice !== undefined ? item.unitPrice : item.unitCost;
+      const price = parseFloat(rawPrice !== undefined ? rawPrice : prod.costo);
       if (!Number.isInteger(qty) || qty <= 0) {
         return res.status(400).json({ error: `Cantidad inválida para producto ${prod.nombre}` });
       }
@@ -93,7 +93,6 @@ async function createPurchase(req, res) {
 
     const purchaseId = purchaseResult.recordset[0].id;
 
-    // Insertar ítems
     for (const item of sanitizedItems) {
       await pool.request()
         .input('purchaseId', purchaseId)
@@ -107,7 +106,6 @@ async function createPurchase(req, res) {
         `);
     }
 
-    // Auditoría
     await pool.request()
       .input('usuarioId', buyerId)
       .input('accion', 'CREATE_PURCHASE')
@@ -135,7 +133,7 @@ async function createPurchase(req, res) {
 async function receivePurchase(req, res) {
   try {
     const purchaseId = req.params.id || req.params.purchaseId;
-    const { receivedItems } = req.body;
+    const { receivedItems, invoiceNumber } = req.body;
     const pool = await getPool();
 
     const purchase = mockTables.compras.find(c => c.id === purchaseId);
@@ -154,22 +152,20 @@ async function receivePurchase(req, res) {
 
     const affectedProductIds = [];
 
-    // Procesar recepción de ítems
     for (const item of items) {
       const prod = mockTables.productos.find(p => p.id === item.producto_id);
       if (!prod) continue;
       affectedProductIds.push(prod.id);
 
-      // Si el cliente envió detalles específicos por ítem (código de lote y fecha de vencimiento reales)
       const inputDetail = Array.isArray(receivedItems)
         ? receivedItems.find(r => r.productId === item.producto_id || r.itemId === item.id)
         : null;
 
-      const batchCode = inputDetail?.codigoLote || `LOTE-${prod.codigo_barras ? prod.codigo_barras.slice(-4) : 'REC'}-${new Date().toISOString().slice(2, 7).replace('-', '')}`;
-      const expDate = inputDetail?.fechaVencimiento || new Date(Date.now() + 365 * 86400000).toISOString().split('T')[0];
-      const qtyReceived = inputDetail?.cantidadRecibida ? parseInt(inputDetail.cantidadRecibida, 10) : item.cantidad;
+      const batchCode = inputDetail?.codigoLote || inputDetail?.batchCode || `LOTE-${prod.codigo_barras ? prod.codigo_barras.slice(-4) : 'REC'}-${new Date().toISOString().slice(2, 7).replace('-', '')}`;
+      const expDate = inputDetail?.fechaVencimiento || inputDetail?.expiryDate || new Date(Date.now() + 365 * 86400000).toISOString().split('T')[0];
+      const rawQty = inputDetail?.cantidadRecibida ?? inputDetail?.quantityReceived;
+      const qtyReceived = rawQty !== undefined ? parseInt(rawQty, 10) : item.cantidad;
 
-      // Buscar si ya existe lote con ese código para ese producto o crear nuevo
       let lote = mockTables.lotes.find(l => l.producto_id === prod.id && l.codigo_lote === batchCode);
       if (lote) {
         lote.stock_actual += qtyReceived;
@@ -183,6 +179,7 @@ async function receivePurchase(req, res) {
           fecha_vencimiento: expDate,
           stock_actual: qtyReceived,
           stock_inicial: qtyReceived,
+          ubicacion: inputDetail?.ubicacion || 'Almacén BPA',
           proveedor_id: purchase.proveedor_id,
           estado: 'VIGENTE'
         };
@@ -191,7 +188,6 @@ async function receivePurchase(req, res) {
 
       item.cantidad_recibida = (item.cantidad_recibida || 0) + qtyReceived;
 
-      // Registrar kárdex de ingreso
       const mov = {
         id: uuidv4(),
         producto_id: prod.id,
@@ -212,13 +208,14 @@ async function receivePurchase(req, res) {
       mockTables.movimientos_stock.push(mov);
     }
 
+    if (invoiceNumber) {
+      purchase.numero_factura = invoiceNumber;
+    }
     purchase.estado = 'RECIBIDA';
     purchase.fecha_actualizacion = new Date().toISOString();
 
-    // Auto-evaluar alertas (resuelve alertas de stock bajo)
     evaluateAlerts(affectedProductIds);
 
-    // Auditoría
     await pool.request()
       .input('usuarioId', req.user.id)
       .input('accion', 'RECEIVE_PURCHASE')
@@ -252,24 +249,35 @@ async function getReplenishmentSuggestions(req, res) {
         .filter(l => l.producto_id === p.id && l.estado === 'VIGENTE' && l.fecha_vencimiento >= todayIso)
         .reduce((sum, l) => sum + (parseInt(l.stock_actual, 10) || 0), 0);
 
-      // Si el stock actual está en o por debajo del mínimo configurado
       if (totalStock <= p.stock_minimo) {
         const cat = mockTables.categorias.find(c => c.id === p.categoria_id);
-        const prov = mockTables.proveedores[0]; // Proveedor preferente
+        const prov = mockTables.proveedores[0];
         const maxStock = p.stock_maximo || p.stock_minimo * 2;
         const suggestedQty = Math.max(10, maxStock - totalStock);
 
         suggestions.push({
+          id: p.id,
           productoId: p.id,
+          producto_id: p.id,
           nombre: p.nombre,
+          producto_nombre: p.nombre,
           codigoBarras: p.codigo_barras,
+          codigo_barras: p.codigo_barras,
           categoria: cat ? cat.nombre : 'General',
           stockActual: totalStock,
+          stock_actual: totalStock,
           stockMinimo: p.stock_minimo,
+          stock_minimo: p.stock_minimo,
           stockMaximo: maxStock,
+          stock_maximo: maxStock,
           cantidadSugerida: suggestedQty,
+          cantidad_sugerida: suggestedQty,
+          costoEstimado: parseFloat(p.costo) || 1.0,
+          precio_costo: parseFloat(p.costo) || 1.0,
           proveedorId: prov ? prov.id : null,
+          proveedor_sugerido_id: prov ? prov.id : null,
           proveedorNombre: prov ? prov.razon_social : 'Droguería Distribuidora Nova Farma S.A.C.',
+          proveedor_sugerido_nombre: prov ? prov.razon_social : 'Droguería Distribuidora Nova Farma S.A.C.',
           proveedorRuc: prov ? prov.ruc : '20100123456'
         });
       }
@@ -283,14 +291,16 @@ async function getReplenishmentSuggestions(req, res) {
 
 async function generatePurchaseOrders(req, res) {
   try {
-    const { supplierId, productOrders } = req.body;
-    if (!supplierId || !Array.isArray(productOrders) || productOrders.length === 0) {
+    const { supplierId, productOrders, items: bodyItems } = req.body;
+    const rawList = Array.isArray(productOrders) ? productOrders : bodyItems;
+    if (!supplierId || !Array.isArray(rawList) || rawList.length === 0) {
       return res.status(400).json({ error: 'Proveedor y lista de productos requeridos' });
     }
 
-    const items = productOrders.map(po => ({
-      productId: po.productId,
-      quantity: po.quantity
+    const items = rawList.map(po => ({
+      productId: po.productId || po.productoId,
+      quantity: po.quantity || po.cantidad || po.cantidadSugerida || 20,
+      unitPrice: po.unitCost || po.unitPrice
     }));
 
     req.body = {

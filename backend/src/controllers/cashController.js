@@ -1,5 +1,57 @@
 const { getPool, mockTables } = require('../config/db');
-const { v4: uuidv4 } = require('uuid');
+
+function enrichShiftRecord(shift, fallbackName = 'Cajero') {
+  const cashSales = (mockTables.ventas || [])
+    .filter(v => v.metodo_pago === 'efectivo' && v.estado === 'COMPLETADA' && v.fecha_creacion >= shift.fecha_apertura && (!shift.fecha_cierre || v.fecha_creacion <= shift.fecha_cierre))
+    .reduce((sum, v) => sum + (parseFloat(v.monto_total) || 0), 0);
+
+  const extraIngresos = (mockTables.movimientos_caja || [])
+    .filter(m => m.turno_id === shift.id && m.tipo === 'INGRESO' && !String(m.motivo || '').toLowerCase().includes('fondo'))
+    .reduce((sum, m) => sum + (parseFloat(m.monto) || 0), 0);
+
+  const extraEgresos = (mockTables.movimientos_caja || [])
+    .filter(m => m.turno_id === shift.id && m.tipo === 'EGRESO')
+    .reduce((sum, m) => sum + (parseFloat(m.monto) || 0), 0);
+
+  const calculatedExpected = shift.estado === 'ABIERTO'
+    ? parseFloat((shift.fondo_inicial + cashSales + extraIngresos - extraEgresos).toFixed(2))
+    : parseFloat(shift.efectivo_esperado ?? (shift.fondo_inicial + cashSales + extraIngresos - extraEgresos));
+
+  return {
+    id: shift.id,
+    cajeroId: shift.cajero_id,
+    cajero_id: shift.cajero_id,
+    cajeroNombre: shift.cajero_nombre || fallbackName,
+    cajero_nombre: shift.cajero_nombre || fallbackName,
+    fechaApertura: shift.fecha_apertura,
+    fecha_apertura: shift.fecha_apertura,
+    fechaCierre: shift.fecha_cierre,
+    fecha_cierre: shift.fecha_cierre,
+    fondoInicial: parseFloat(shift.fondo_inicial),
+    monto_apertura: parseFloat(shift.fondo_inicial),
+    efectivoEsperado: calculatedExpected,
+    monto_cierre_esperado: calculatedExpected,
+    efectivoContado: shift.efectivo_contado !== null && shift.efectivo_contado !== undefined ? parseFloat(shift.efectivo_contado) : null,
+    monto_cierre_real: shift.efectivo_contado !== null && shift.efectivo_contado !== undefined ? parseFloat(shift.efectivo_contado) : null,
+    diferencia: shift.diferencia !== null && shift.diferencia !== undefined ? parseFloat(shift.diferencia) : null,
+    totalVentasEfectivo: cashSales,
+    total_ventas_efectivo: cashSales,
+    totalVentasYape: 0,
+    total_ventas_yape: 0,
+    totalVentasPlin: 0,
+    total_ventas_plin: 0,
+    totalVentasTarjeta: 0,
+    total_ventas_tarjeta: 0,
+    totalIngresosExtra: extraIngresos,
+    total_ingresos_extra: extraIngresos,
+    totalEgresosExtra: extraEgresos,
+    total_egresos_extra: extraEgresos,
+    estado: shift.estado,
+    observaciones: shift.observaciones,
+    notas_apertura: shift.observaciones,
+    notas_cierre: shift.observaciones
+  };
+}
 
 async function getCurrentShift(req, res) {
   try {
@@ -7,50 +59,11 @@ async function getCurrentShift(req, res) {
     const result = await pool.request().query("SELECT * FROM turnos_caja WHERE estado = 'ABIERTO'");
 
     if (result.recordset.length === 0) {
-      return res.json({ activeShift: null });
+      return res.json({ activeShift: null, shift: null });
     }
 
     const shift = result.recordset[0];
-
-    // Compute sales in cash during this shift
-    const cashSales = (mockTables.ventas || [])
-      .filter(v => v.metodo_pago === 'efectivo' && v.estado === 'COMPLETADA' && v.fecha_creacion >= shift.fecha_apertura)
-      .reduce((sum, v) => sum + (parseFloat(v.monto_total) || 0), 0);
-
-    const extraIngresos = (mockTables.movimientos_caja || [])
-      .filter(m => m.turno_id === shift.id && m.tipo === 'INGRESO' && m.motivo !== 'Fondo de caja inicial')
-      .reduce((sum, m) => sum + (parseFloat(m.monto) || 0), 0);
-
-    const extraEgresos = (mockTables.movimientos_caja || [])
-      .filter(m => m.turno_id === shift.id && m.tipo === 'EGRESO')
-      .reduce((sum, m) => sum + (parseFloat(m.monto) || 0), 0);
-
-    const calculatedExpected = parseFloat((shift.fondo_inicial + cashSales + extraIngresos - extraEgresos).toFixed(2));
-    shift.efectivo_esperado = calculatedExpected;
-
-    const shiftObj = {
-      id: shift.id,
-      cajeroId: shift.cajero_id,
-      cajero_id: shift.cajero_id,
-      cajeroNombre: shift.cajero_nombre || req.user.name,
-      cajero_nombre: shift.cajero_nombre || req.user.name,
-      fechaApertura: shift.fecha_apertura,
-      fecha_apertura: shift.fecha_apertura,
-      fechaCierre: shift.fecha_cierre,
-      fecha_cierre: shift.fecha_cierre,
-      fondoInicial: parseFloat(shift.fondo_inicial),
-      monto_apertura: parseFloat(shift.fondo_inicial),
-      efectivoEsperado: calculatedExpected,
-      monto_cierre_esperado: calculatedExpected,
-      totalVentasEfectivo: cashSales,
-      total_ventas_efectivo: cashSales,
-      totalIngresosExtra: extraIngresos,
-      total_ingresos_extra: extraIngresos,
-      totalEgresosExtra: extraEgresos,
-      total_egresos_extra: extraEgresos,
-      estado: shift.estado,
-      observaciones: shift.observaciones
-    };
+    const shiftObj = enrichShiftRecord(shift, req.user?.name);
 
     res.json({
       success: true,
@@ -76,7 +89,6 @@ async function openCashRegister(req, res) {
 
     const pool = await getPool();
 
-    // Validar si ya hay un turno abierto
     const existing = await pool.request().query("SELECT id FROM turnos_caja WHERE estado = 'ABIERTO'");
     if (existing.recordset.length > 0) {
       return res.status(409).json({ error: 'Ya existe un turno de caja abierto. Debe cerrarlo antes de iniciar otro.' });
@@ -94,7 +106,6 @@ async function openCashRegister(req, res) {
 
     const shiftId = result.recordset[0].id;
 
-    // Registrar movimiento de apertura
     await pool.request()
       .input('turnoId', shiftId)
       .input('tipo', 'INGRESO')
@@ -105,7 +116,6 @@ async function openCashRegister(req, res) {
         VALUES (@turnoId, @tipo, @monto, @motivo)
       `);
 
-    // Auditoría
     await pool.request()
       .input('usuarioId', cashierId)
       .input('accion', 'OPEN_CASH_REGISTER')
@@ -118,27 +128,17 @@ async function openCashRegister(req, res) {
         VALUES (@usuarioId, @accion, @modulo, @tablaAfectada, @registroId, @datosNuevos)
       `);
 
-    const createdShift = {
+    const createdShift = enrichShiftRecord({
       id: shiftId,
-      cajeroId: cashierId,
       cajero_id: cashierId,
-      cajeroNombre: req.user.name,
       cajero_nombre: req.user.name,
-      fechaApertura: new Date().toISOString(),
       fecha_apertura: new Date().toISOString(),
-      fondoInicial: fund,
-      monto_apertura: fund,
-      efectivoEsperado: fund,
-      monto_cierre_esperado: fund,
-      totalVentasEfectivo: 0,
-      total_ventas_efectivo: 0,
-      totalIngresosExtra: 0,
-      total_ingresos_extra: 0,
-      totalEgresosExtra: 0,
-      total_egresos_extra: 0,
+      fecha_cierre: null,
+      fondo_inicial: fund,
+      efectivo_esperado: fund,
       estado: 'ABIERTO',
       observaciones: observations || `Turno ${shift}`
-    };
+    }, req.user.name);
 
     res.status(201).json({
       success: true,
@@ -183,7 +183,6 @@ async function createMovement(req, res) {
         VALUES (@turnoId, @tipo, @monto, @motivo)
       `);
 
-    // Auditoría
     await pool.request()
       .input('usuarioId', req.user.id)
       .input('accion', `CASH_${tipo.toUpperCase()}`)
@@ -204,9 +203,10 @@ async function createMovement(req, res) {
 
 async function closeCashRegister(req, res) {
   try {
-    const { countedCash, observations = '' } = req.body;
+    const rawCounted = req.body.countedCash !== undefined ? req.body.countedCash : req.body.montoRealEfectivo;
+    const observations = req.body.observations || req.body.notasCierre || '';
     const cashierId = req.user.id;
-    const counted = parseFloat(countedCash);
+    const counted = parseFloat(rawCounted);
 
     if (!Number.isFinite(counted) || counted < 0) {
       return res.status(400).json({ error: 'Debe ingresar el efectivo contado físico' });
@@ -219,21 +219,8 @@ async function closeCashRegister(req, res) {
     }
 
     const shift = active.recordset[0];
-
-    // Compute expected
-    const cashSales = (mockTables.ventas || [])
-      .filter(v => v.metodo_pago === 'efectivo' && v.estado === 'COMPLETADA' && v.fecha_creacion >= shift.fecha_apertura)
-      .reduce((sum, v) => sum + (parseFloat(v.monto_total) || 0), 0);
-
-    const extraIngresos = (mockTables.movimientos_caja || [])
-      .filter(m => m.turno_id === shift.id && m.tipo === 'INGRESO' && m.motivo !== 'Fondo de caja inicial')
-      .reduce((sum, m) => sum + (parseFloat(m.monto) || 0), 0);
-
-    const extraEgresos = (mockTables.movimientos_caja || [])
-      .filter(m => m.turno_id === shift.id && m.tipo === 'EGRESO')
-      .reduce((sum, m) => sum + (parseFloat(m.monto) || 0), 0);
-
-    const expected = parseFloat((shift.fondo_inicial + cashSales + extraIngresos - extraEgresos).toFixed(2));
+    const enriched = enrichShiftRecord(shift, req.user.name);
+    const expected = enriched.efectivoEsperado;
     const difference = parseFloat((counted - expected).toFixed(2));
 
     await pool.request()
@@ -253,7 +240,6 @@ async function closeCashRegister(req, res) {
         WHERE id = @id
       `);
 
-    // Auditoría
     await pool.request()
       .input('usuarioId', cashierId)
       .input('accion', 'CLOSE_CASH_REGISTER')
@@ -271,9 +257,9 @@ async function closeCashRegister(req, res) {
       message: 'Caja cerrada y arqueo completado correctamente',
       summary: {
         fondoInicial: shift.fondo_inicial,
-        ventasEfectivo: cashSales,
-        ingresosExtra: extraIngresos,
-        egresosExtra: extraEgresos,
+        ventasEfectivo: enriched.totalVentasEfectivo,
+        ingresosExtra: enriched.totalIngresosExtra,
+        egresosExtra: enriched.totalEgresosExtra,
         efectivoEsperado: expected,
         efectivoContado: counted,
         diferencia: difference,
@@ -289,7 +275,8 @@ async function getShiftHistory(req, res) {
   try {
     const pool = await getPool();
     const result = await pool.request().query('SELECT * FROM turnos_caja ORDER BY fecha_apertura DESC');
-    res.json({ shifts: result.recordset });
+    const shifts = result.recordset.map(s => enrichShiftRecord(s));
+    res.json({ shifts });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }

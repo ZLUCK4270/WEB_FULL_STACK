@@ -441,7 +441,7 @@ export const PurchasesView: React.FC = () => {
                               prev.map((it, i) => (i === idx ? { ...it, productId: pId, unitCost: p?.costo || 5 } : it))
                             );
                           }}
-                          className="w-full p-1.5 rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs"
+                          className="w-full p-1.5 rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-xs"
                         >
                           {products.map((p) => (
                             <option key={p.id} value={p.id}>{p.nombre}</option>
@@ -460,7 +460,7 @@ export const PurchasesView: React.FC = () => {
                               prev.map((it, i) => (i === idx ? { ...it, quantity: q } : it))
                             );
                           }}
-                          className="w-full p-1.5 rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 font-bold text-center"
+                          className="w-full p-1.5 rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white font-bold text-center"
                         />
                       </div>
                       <div className="col-span-2">
@@ -476,7 +476,7 @@ export const PurchasesView: React.FC = () => {
                               prev.map((it, i) => (i === idx ? { ...it, unitCost: c } : it))
                             );
                           }}
-                          className="w-full p-1.5 rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-right"
+                          className="w-full p-1.5 rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-right"
                         />
                       </div>
                       <div className="col-span-1 text-center">

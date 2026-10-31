@@ -1,19 +1,19 @@
 import React, { useState, useEffect } from 'react';
-import { LanguageProvider } from './i18n/I18nContext';
 import { PharmacyProvider, usePharmacy } from './context/PharmacyContext';
+import { LanguageProvider } from './i18n/I18nContext';
 import { Header } from './components/Header';
 import { SidebarDrawer } from './components/layout/SidebarDrawer';
-import { MobileNavigationDock } from './components/layout/MobileNavigationDock';
-import { LoginView } from './components/auth/LoginView';
 import { DashboardView } from './components/dashboard/DashboardView';
 import { PointOfSaleView } from './components/pos/PointOfSaleView';
-import { InventoryBatchesView } from './components/inventory/InventoryBatchesView';
-import { ActiveAlertsView } from './components/alerts/ActiveAlertsView';
-import { CustomersView } from './components/customers/CustomersView';
 import { SalesHistoryView } from './components/sales/SalesHistoryView';
+import { InventoryBatchesView } from './components/inventory/InventoryBatchesView';
 import { CashRegisterView } from './components/cash/CashRegisterView';
 import { PurchasesView } from './components/purchases/PurchasesView';
+import { ActiveAlertsView } from './components/alerts/ActiveAlertsView';
+import { CustomersView } from './components/customers/CustomersView';
 import { AuditView } from './components/audit/AuditView';
+import { LoginView } from './components/auth/LoginView';
+import { ShieldAlert, ArrowLeft } from 'lucide-react';
 
 export type TabId =
   | 'dashboard'
@@ -26,176 +26,135 @@ export type TabId =
   | 'customers'
   | 'audit';
 
-const TABS: { id: TabId; label: string }[] = [
-  { id: 'dashboard', label: 'Panel de control' },
-  { id: 'pos', label: 'Punto de venta' },
-  { id: 'sales', label: 'Historial de ventas' },
-  { id: 'inventory', label: 'Inventario y lotes' },
-  { id: 'cash', label: 'Caja registradora' },
-  { id: 'purchases', label: 'Compras y reposición' },
-  { id: 'alerts', label: 'Alertas de stock' },
-  { id: 'customers', label: 'Clientes' },
-  { id: 'audit', label: 'Auditoría y seguridad' }
-];
-
-const tabsByRole: Record<string, TabId[]> = {
-  admin: ['dashboard', 'pos', 'sales', 'inventory', 'cash', 'purchases', 'customers', 'alerts', 'audit'],
-  vendedor: ['dashboard', 'pos', 'sales', 'cash', 'customers', 'alerts'],
-  almacen: ['dashboard', 'inventory', 'purchases', 'alerts']
+const ROLE_PERMISSIONS: Record<string, TabId[]> = {
+  admin: ['dashboard', 'pos', 'sales', 'inventory', 'cash', 'purchases', 'alerts', 'customers', 'audit'],
+  vendedor: ['pos', 'sales', 'cash', 'customers'],
+  cajero: ['pos', 'sales', 'cash', 'customers'],
+  almacen: ['dashboard', 'inventory', 'purchases', 'alerts'],
+  almacenero: ['dashboard', 'inventory', 'purchases', 'alerts'],
 };
 
-function defaultTabFor(role: string | undefined): TabId {
-  return (tabsByRole[role ?? 'vendedor'] ?? ['dashboard'])[0];
-}
-
-export const DashboardShell: React.FC = () => {
-  const { user, isLoading, logout, pendingAlerts } = usePharmacy();
-  const [activeTab, setActiveTab] = useState<TabId>('dashboard');
-  const [isSidebarOpen, setIsSidebarOpen] = useState<boolean>(false);
-  const [isSearchOpen, setIsSearchOpen] = useState<boolean>(false);
-
-  const allowedTabs = tabsByRole[user?.role ?? 'vendedor'] ?? ['dashboard'];
+const MainLayout: React.FC = () => {
+  const { user, logout, alerts } = usePharmacy();
+  const [activeTab, setActiveTab] = useState<TabId>('pos');
+  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const [darkMode, setDarkMode] = useState<boolean>(() => {
+    return localStorage.getItem('nova_theme') === 'dark';
+  });
 
   useEffect(() => {
-    if (user && !allowedTabs.includes(activeTab)) {
-      setActiveTab(defaultTabFor(user.role));
+    const root = document.documentElement;
+    if (darkMode) {
+      root.classList.add('dark');
+      localStorage.setItem('nova_theme', 'dark');
+    } else {
+      root.classList.remove('dark');
+      localStorage.setItem('nova_theme', 'light');
     }
-  }, [user, allowedTabs, activeTab]);
+  }, [darkMode]);
 
-  if (isLoading) {
-    return (
-      <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center p-4">
-        <div className="w-10 h-10 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin mb-4" />
-        <p className="text-slate-400 text-sm font-medium">Iniciando Botica Nova Salud...</p>
-      </div>
-    );
-  }
+  const allowedTabs: TabId[] = user ? (ROLE_PERMISSIONS[user.role] || ['pos']) : [];
+  const defaultTabForRole: TabId = user?.role === 'almacen' ? 'inventory' : 'pos';
+  const currentTab: TabId = allowedTabs.includes(activeTab) ? activeTab : defaultTabForRole;
 
   if (!user) {
     return <LoginView />;
   }
 
-  const handleSelectTab = (tab: string) => setActiveTab(tab as TabId);
+  const pendingAlerts = alerts.filter(a => String(a.estado).toUpperCase() === 'PENDIENTE').length;
+  const hasPermission = allowedTabs.includes(currentTab);
+
+  const handleNavigate = (tab: string) => {
+    setActiveTab(tab as TabId);
+  };
 
   return (
-    <div className="min-h-screen bg-slate-50/80 text-slate-900 flex flex-col justify-between selection:bg-emerald-500 selection:text-white">
+    <div className="min-h-screen bg-slate-100 dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex flex-col font-sans selection:bg-emerald-500 selection:text-white transition-colors duration-200">
       <Header
-        activeTab={activeTab}
-        setActiveTab={handleSelectTab}
-        user={user}
-        onOpenSidebar={() => setIsSidebarOpen(true)}
-        onOpenSearch={() => setIsSearchOpen(true)}
-        onLogout={logout}
-      />
-
-      <main className="flex-1 max-w-7xl w-full mx-auto px-3 sm:px-6 lg:px-8 py-5 sm:py-8 pb-24 transition-all">
-        <div className="animate-in fade-in duration-200">
-          {activeTab === 'dashboard' && <DashboardView onNavigate={handleSelectTab} />}
-          {activeTab === 'pos' && <PointOfSaleView />}
-          {activeTab === 'sales' && <SalesHistoryView />}
-          {activeTab === 'inventory' && (
-            <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-xs">
-              <InventoryBatchesView />
-            </div>
-          )}
-          {activeTab === 'cash' && <CashRegisterView />}
-          {activeTab === 'purchases' && <PurchasesView />}
-          {activeTab === 'alerts' && (
-            <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-xs">
-              <ActiveAlertsView />
-            </div>
-          )}
-          {activeTab === 'customers' && <CustomersView />}
-          {activeTab === 'audit' && <AuditView />}
-        </div>
-      </main>
-
-      <footer className="border-t border-slate-200/80 bg-white/70 backdrop-blur-md py-4 hidden sm:block">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-500">
-          <div className="flex items-center gap-3">
-            <span className="font-bold text-slate-800">Botica Nova Salud S.A.C.</span>
-            <span className="text-slate-400">• Sistema integral farmacéutico (FEFO, Punto de Venta, Kárdex, Arqueo de Caja y DIGEMID)</span>
-          </div>
-          <div className="flex items-center gap-2 text-slate-400">
-            <span>{user.name}</span>
-            <span className="px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 font-bold">{user.role}</span>
-          </div>
-        </div>
-      </footer>
-
-      <MobileNavigationDock
-        activeTab={activeTab}
-        setActiveTab={handleSelectTab}
+        activeTab={currentTab}
+        setActiveTab={setActiveTab}
         allowedTabs={allowedTabs}
-        onOpenSidebar={() => setIsSidebarOpen(true)}
-        onOpenSearch={() => setIsSearchOpen(true)}
         pendingAlerts={pendingAlerts}
-      />
-
-      <QuickSearch
-        isOpen={isSearchOpen}
-        onClose={() => setIsSearchOpen(false)}
-        onNavigate={handleSelectTab}
-        allowedTabs={allowedTabs}
-      />
-
-      <SidebarDrawer
-        isOpen={isSidebarOpen}
-        onClose={() => setIsSidebarOpen(false)}
-        activeTab={activeTab}
-        setActiveTab={handleSelectTab}
-        allowedTabs={allowedTabs}
         user={user}
         onLogout={logout}
+        isSidebarOpen={isSidebarOpen}
+        onToggleSidebar={() => setIsSidebarOpen(prev => !prev)}
+        darkMode={darkMode}
+        onToggleDarkMode={() => setDarkMode(prev => !prev)}
       />
-    </div>
-  );
-};
 
-type QuickSearchProps = {
-  isOpen: boolean;
-  onClose: () => void;
-  onNavigate: (tab: TabId) => void;
-  allowedTabs: TabId[];
-};
+      {/* Contenedor principal en fila: el panel lateral empuja el contenido sin superponerse */}
+      <div className="flex-1 flex min-h-0">
+        <SidebarDrawer
+          isOpen={isSidebarOpen}
+          onClose={() => setIsSidebarOpen(false)}
+          activeTab={currentTab}
+          setActiveTab={handleNavigate}
+          pendingAlerts={pendingAlerts}
+          user={user}
+          allowedTabs={allowedTabs}
+          onLogout={logout}
+        />
 
-const QuickSearch: React.FC<QuickSearchProps> = ({ isOpen, onClose, onNavigate, allowedTabs }) => {
-  if (!isOpen) return null;
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-xs p-4 animate-in fade-in">
-      <div className="bg-white dark:bg-slate-900 rounded-2xl w-full max-w-md p-6 shadow-2xl border border-slate-200 dark:border-slate-800 space-y-4">
-        <div className="flex items-center justify-between pb-2 border-b border-slate-100 dark:border-slate-800">
-          <h3 className="text-sm font-bold text-slate-900 dark:text-white">Buscar Módulo del Sistema</h3>
-          <button onClick={onClose} className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200">
-            ✕
-          </button>
-        </div>
-        <div className="space-y-1.5 max-h-80 overflow-y-auto">
-          {TABS.filter((t) => allowedTabs.includes(t.id)).map((t) => (
-            <button
-              key={t.id}
-              onClick={() => {
-                onNavigate(t.id);
-                onClose();
-              }}
-              className="w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl border border-slate-100 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-800/50 text-left text-xs font-bold transition hover:bg-emerald-50 dark:hover:bg-emerald-950/20"
-            >
-              <span className="text-slate-800 dark:text-slate-200">{t.label}</span>
-              <span className="text-[10px] text-slate-400 font-mono">[{t.id}]</span>
-            </button>
-          ))}
+        <div className="flex-1 flex flex-col min-w-0">
+          <main className="flex-1 max-w-[1600px] w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
+            {!hasPermission ? (
+              <div className="max-w-md mx-auto mt-16 bg-white dark:bg-slate-900 rounded-2xl border border-rose-200 dark:border-rose-900/50 p-8 text-center shadow-sm">
+                <div className="w-16 h-16 bg-rose-50 dark:bg-rose-950/60 text-rose-600 dark:text-rose-400 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                  <ShieldAlert className="w-8 h-8" />
+                </div>
+                <h2 className="text-xl font-bold text-slate-900 dark:text-white mb-2">Acceso Restringido</h2>
+                <p className="text-sm text-slate-600 dark:text-slate-300 mb-6">
+                  Tu perfil actual (<span className="font-bold uppercase text-slate-800 dark:text-slate-100">{user.roleTitle || user.role}</span>) no cuenta con permisos para acceder a este módulo.
+                </p>
+                <button
+                  onClick={() => setActiveTab(defaultTabForRole)}
+                  className="inline-flex items-center gap-2 px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-xl text-sm transition-colors cursor-pointer"
+                >
+                  <ArrowLeft className="w-4 h-4" />
+                  Volver al módulo principal
+                </button>
+              </div>
+            ) : (
+              <>
+                {currentTab === 'dashboard' && <DashboardView onNavigate={handleNavigate} />}
+                {currentTab === 'pos' && <PointOfSaleView />}
+                {currentTab === 'sales' && <SalesHistoryView />}
+                {currentTab === 'inventory' && <InventoryBatchesView />}
+                {currentTab === 'cash' && <CashRegisterView />}
+                {currentTab === 'purchases' && <PurchasesView />}
+                {currentTab === 'alerts' && <ActiveAlertsView />}
+                {currentTab === 'customers' && <CustomersView />}
+                {currentTab === 'audit' && <AuditView />}
+              </>
+            )}
+          </main>
+
+          <footer className="bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 py-4 mt-auto hidden md:block transition-colors">
+            <div className="max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row justify-between items-center text-xs text-slate-600 dark:text-slate-400 gap-2">
+              <div className="flex items-center gap-2">
+                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                <span className="font-semibold text-slate-800 dark:text-slate-200">Botica Nova Salud • Sistema Integral ERP Farmacéutico</span>
+              </div>
+              <div>
+                Rol activo: <strong className="uppercase text-slate-800 dark:text-slate-200">{user.roleTitle || user.role}</strong> • Cumplimiento BPA / DIGEMID / FEFO
+              </div>
+            </div>
+          </footer>
         </div>
       </div>
     </div>
   );
 };
 
-export default function App() {
+export function App() {
   return (
     <LanguageProvider>
       <PharmacyProvider>
-        <DashboardShell />
+        <MainLayout />
       </PharmacyProvider>
     </LanguageProvider>
   );
 }
+
+export default App;

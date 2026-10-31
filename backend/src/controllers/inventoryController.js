@@ -1,10 +1,5 @@
-const { getPool, sql, mockTables, evaluateAlerts } = require('../config/db');
-const { getValidBatchesForProduct } = require('../services/fefoService');
-const { v4: uuidv4 } = require('uuid');
+const { getPool, mockTables, evaluateAlerts } = require('../config/db');
 
-/**
- * Listado de productos con stock calculado en tiempo real desde lotes.
- */
 async function listProducts(req, res) {
   try {
     const pool = await getPool();
@@ -24,13 +19,23 @@ async function listProducts(req, res) {
       ORDER BY p.nombre
     `);
 
-    let products = result.recordset.map(p => ({
-      ...p,
-      total_stock: parseInt(p.total_stock, 10) || 0,
-      low_stock: (parseInt(p.total_stock, 10) || 0) <= parseInt(p.stock_minimo, 10),
-      precio_venta: parseFloat(p.precio_venta),
-      costo: parseFloat(p.costo)
-    }));
+    let products = result.recordset.map(p => {
+      const totalStock = parseInt(p.total_stock, 10) || 0;
+      const minStock = parseInt(p.stock_minimo, 10) || 0;
+      const isLow = totalStock <= minStock;
+      return {
+        ...p,
+        total_stock: totalStock,
+        stock_total: totalStock,
+        stock_vigente: totalStock,
+        low_stock: isLow,
+        bajo_stock: isLow,
+        precio_venta: parseFloat(p.precio_venta),
+        costo: parseFloat(p.costo),
+        precio_costo: parseFloat(p.costo),
+        controlado: Boolean(p.es_controlado)
+      };
+    });
 
     if (q) {
       const term = String(q).replace(/%/g, '').toLowerCase().trim();
@@ -55,9 +60,21 @@ async function listProducts(req, res) {
 async function getProductStock(req, res) {
   try {
     const { productId } = req.params;
-    const stock = await getValidBatchesForProduct(productId);
-    const total = stock.reduce((sum, b) => sum + b.stock_actual, 0);
-    res.json({ productId, totalStock: total, batches: stock });
+    const pool = await getPool();
+    const result = await pool.request()
+      .input('productId', productId)
+      .query('SELECT * FROM lotes WHERE producto_id = @productId ORDER BY fecha_vencimiento ASC');
+    const batches = result.recordset.map(b => ({
+      ...b,
+      stock_actual: parseInt(b.stock_actual, 10) || 0,
+      stock_inicial: parseInt(b.stock_inicial, 10) || 0,
+      ubicacion: b.ubicacion || 'Almacén General'
+    }));
+    const todayIso = new Date().toISOString().split('T')[0];
+    const total = batches
+      .filter(b => b.estado === 'VIGENTE' && b.fecha_vencimiento >= todayIso)
+      .reduce((sum, b) => sum + b.stock_actual, 0);
+    res.json({ productId, totalStock: total, batches });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -92,7 +109,6 @@ async function createProduct(req, res) {
       return res.status(409).json({ error: 'Ya existe un producto con ese código de barras' });
     }
 
-    // Default category if not set or invalid
     const catId = categoria_id || (mockTables.categorias[0] ? mockTables.categorias[0].id : null);
     const labId = laboratorio_id || (mockTables.laboratorios[0] ? mockTables.laboratorios[0].id : null);
 
@@ -121,7 +137,6 @@ async function createProduct(req, res) {
 
     const newProdId = result.recordset[0].id;
 
-    // Auditoría
     await pool.request()
       .input('usuarioId', req.user.id)
       .input('accion', 'CREATE_PRODUCT')
@@ -145,7 +160,7 @@ async function updateProduct(req, res) {
     const { id } = req.params;
     const {
       nombre, nombre_generico, concentracion, presentacion,
-      categoria_id, laboratorio_id, precio_venta, costo, stock_minimo, stock_maximo
+      categoria_id, laboratorio_id, precio_venta, costo, stock_minimo
     } = req.body;
 
     const pool = await getPool();
@@ -204,7 +219,6 @@ async function deleteProduct(req, res) {
     product.esta_activo = 0;
     product.fecha_actualizacion = new Date().toISOString();
 
-    // Auditoría
     await pool.request()
       .input('usuarioId', req.user.id)
       .input('accion', 'DELETE_PRODUCT')
@@ -264,7 +278,6 @@ async function adjustStock(req, res) {
     lote.estado = stockNuevo <= 0 ? 'AGOTADO' : 'VIGENTE';
     lote.fecha_actualizacion = new Date().toISOString();
 
-    // Registrar kárdex
     await pool.request()
       .input('productoId', productId)
       .input('loteId', loteId)
@@ -311,7 +324,8 @@ async function listBatches(req, res) {
       batches: result.recordset.map(b => ({
         ...b,
         stock_actual: parseInt(b.stock_actual, 10) || 0,
-        stock_inicial: parseInt(b.stock_inicial, 10) || 0
+        stock_inicial: parseInt(b.stock_inicial, 10) || 0,
+        ubicacion: b.ubicacion || 'Almacén General'
       }))
     });
   } catch (error) {
@@ -321,7 +335,7 @@ async function listBatches(req, res) {
 
 async function createBatch(req, res) {
   try {
-    const { productId, codigoLote, fechaVencimiento, stockInicial, proveedorId } = req.body;
+    const { productId, codigoLote, fechaVencimiento, stockInicial, proveedorId, ubicacion } = req.body;
     const qty = parseInt(stockInicial, 10);
 
     if (!productId || !codigoLote || !fechaVencimiento || !Number.isInteger(qty) || qty <= 0) {
@@ -330,20 +344,21 @@ async function createBatch(req, res) {
 
     const pool = await getPool();
     const result = await pool.request()
+      .input('productoId', productId)
       .input('productId', productId)
       .input('codigoLote', String(codigoLote).trim())
       .input('fechaVencimiento', fechaVencimiento)
       .input('stockInicial', qty)
       .input('proveedorId', proveedorId || null)
+      .input('ubicacion', ubicacion || 'Almacén General')
       .query(`
         INSERT INTO lotes (producto_id, codigo_lote, fecha_vencimiento, stock_actual, stock_inicial, proveedor_id, estado)
         OUTPUT INSERTED.id
-        VALUES (@productId, @codigoLote, @fechaVencimiento, @stockInicial, @stockInicial, @proveedorId, 'VIGENTE')
+        VALUES (@productoId, @codigoLote, @fechaVencimiento, @stockInicial, @stockInicial, @proveedorId, 'VIGENTE')
       `);
 
     const newLoteId = result.recordset[0].id;
 
-    // Registrar kárdex de ingreso
     await pool.request()
       .input('productoId', productId)
       .input('loteId', newLoteId)
@@ -381,21 +396,40 @@ async function getKardex(req, res) {
       const p = mockTables.productos.find(prod => prod.id === m.producto_id);
       const l = mockTables.lotes.find(lot => lot.id === m.lote_id);
       const u = mockTables.perfiles_usuario.find(usr => usr.id === m.usuario_id);
+      const prodNombre = p ? p.nombre : m.producto_nombre || 'Producto';
+      const codBarras = p ? p.codigo_barras : m.codigo_barras || '';
+      const codLote = l ? l.codigo_lote : m.codigo_lote || '';
+      const usrNombre = u ? `${u.nombre} ${u.apellido}` : m.usuario_nombre || 'Sistema';
       return {
         id: m.id,
+        // camelCase
         productoId: m.producto_id,
-        productoNombre: p ? p.nombre : m.producto_nombre || 'Producto',
-        codigoBarras: p ? p.codigo_barras : m.codigo_barras || '',
+        productoNombre: prodNombre,
+        codigoBarras: codBarras,
         loteId: m.lote_id,
-        codigoLote: l ? l.codigo_lote : m.codigo_lote || '',
+        codigoLote: codLote,
         tipoMovimiento: m.tipo_movimiento,
         cantidad: m.cantidad,
         stockAnterior: m.stock_anterior,
         stockNuevo: m.stock_nuevo,
         motivo: m.motivo,
-        usuarioNombre: u ? `${u.nombre} ${u.apellido}` : m.usuario_nombre || 'Sistema',
+        usuarioId: m.usuario_id,
+        usuarioNombre: usrNombre,
         fecha: m.fecha,
-        referenciaId: m.referencia_id
+        referenciaId: m.referencia_id,
+        // snake_case aliases for frontend mapper
+        producto_id: m.producto_id,
+        producto_nombre: prodNombre,
+        codigo_barras: codBarras,
+        lote_id: m.lote_id,
+        codigo_lote: codLote,
+        tipo_movimiento: m.tipo_movimiento,
+        stock_anterior: m.stock_anterior,
+        stock_nuevo: m.stock_nuevo,
+        usuario_id: m.usuario_id,
+        usuario_nombre: usrNombre,
+        fecha_creacion: m.fecha,
+        referencia_id: m.referencia_id
       };
     });
 
@@ -428,6 +462,7 @@ async function getSubstitutes(req, res) {
       p.nombre_generico.toLowerCase().trim() === gen
     ).map(p => {
       const cat = mockTables.categorias.find(c => c.id === p.categoria_id);
+      const lab = mockTables.laboratorios.find(l => l.id === p.laboratorio_id);
       const stock = mockTables.lotes
         .filter(l => l.producto_id === p.id && l.estado === 'VIGENTE' && l.fecha_vencimiento >= todayIso)
         .reduce((sum, l) => sum + (parseInt(l.stock_actual, 10) || 0), 0);
@@ -435,11 +470,17 @@ async function getSubstitutes(req, res) {
         id: p.id,
         nombre: p.nombre,
         codigo: p.codigo_barras,
+        codigo_barras: p.codigo_barras,
         generico: p.nombre_generico,
+        nombre_generico: p.nombre_generico,
         concentracion: p.concentracion,
         presentacion: p.presentacion,
+        laboratorio: lab ? lab.nombre : 'Genérico',
         precio: parseFloat(p.precio_venta),
+        precio_venta: parseFloat(p.precio_venta),
         stockTotal: stock,
+        stock_disponible: stock,
+        requiere_receta: p.requiere_receta,
         categoria: cat ? cat.nombre : 'General'
       };
     }).filter(p => p.stockTotal > 0);
@@ -474,7 +515,12 @@ async function listSuppliers(req, res) {
   try {
     const pool = await getPool();
     const result = await pool.request().query('SELECT * FROM proveedores ORDER BY razon_social');
-    res.json({ suppliers: result.recordset });
+    res.json({
+      suppliers: result.recordset.map(s => ({
+        ...s,
+        razonSocial: s.razon_social
+      }))
+    });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }

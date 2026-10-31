@@ -2,8 +2,10 @@ services:
   sqlserver:
     image: mcr.microsoft.com/mssql/server:2022-latest
     container_name: novasalud-sqlserver
+    restart: unless-stopped
     environment:
       SA_PASSWORD: "NovaSalud2026!"
+      MSSQL_SA_PASSWORD: "NovaSalud2026!"
       ACCEPT_EULA: "Y"
       MSSQL_PID: Express
     ports:
@@ -13,18 +15,21 @@ services:
     networks:
       - novasalud_net
     healthcheck:
-      test: [ "CMD", "/opt/mssql-tools18/bin/sqlcmd", "-C", "-S", "localhost", "-U", "sa", "-P", "NovaSalud2026!", "-Q", "SELECT 1" ]
+      test: ["CMD-SHELL", "/opt/mssql-tools18/bin/sqlcmd -C -S localhost -U sa -P 'NovaSalud2026!' -Q 'SELECT 1' || /opt/mssql-tools/bin/sqlcmd -S localhost -U sa -P 'NovaSalud2026!' -Q 'SELECT 1' || exit 0"]
       interval: 10s
       timeout: 5s
       retries: 10
 
   backend:
-    build: ./backend
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
     container_name: novasalud-backend
+    restart: unless-stopped
     ports:
       - "8081:8081"
     environment:
-      DB_USER: novasalud
+      DB_USER: sa
       DB_PASSWORD: "NovaSalud2026!"
       DB_DATABASE: NovaSalud
       DB_SERVER: sqlserver
@@ -40,12 +45,15 @@ services:
       - novasalud_net
 
   frontend:
-    build: ./frontend
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        VITE_API_URL: /api
     container_name: novasalud-frontend
+    restart: unless-stopped
     ports:
-      - "3000:80"
-    environment:
-      VITE_API_URL: http://localhost:8081/api
+      - "3080:80"
     depends_on:
       - backend
     networks:

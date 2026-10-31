@@ -366,28 +366,30 @@ export const PointOfSaleView: React.FC = () => {
       )}
 
       {/* Cuerpo Principal: Buscador y Catálogo (Izquierda) + Carrito (Derecha) */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
         {/* Catálogo de Medicamentos */}
-        <div className="lg:col-span-7 space-y-4">
-          <div className="bg-white dark:bg-slate-900 p-3 rounded-xl border border-slate-200 dark:border-slate-800">
+        <div className="lg:col-span-8 space-y-4">
+          <div className="bg-white dark:bg-slate-900 p-3.5 rounded-xl border border-slate-200 dark:border-slate-800 shadow-xs">
             <div className="relative">
-              <Search className="absolute left-3 top-2.5 w-4 h-4 text-slate-400" />
+              <Search className="absolute left-3.5 top-3 w-4 h-4 text-slate-500 dark:text-slate-400" />
               <input
                 ref={searchInputRef}
                 type="text"
                 placeholder="Buscar por nombre, código de barra, principio activo o laboratorio... [F2]"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-9 pr-4 py-2 text-xs rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 focus:outline-hidden focus:ring-2 focus:ring-emerald-500 text-slate-900 dark:text-white"
+                className="w-full pl-10 pr-4 py-2.5 text-sm rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 focus:outline-hidden focus:ring-2 focus:ring-emerald-500 text-slate-900 dark:text-white placeholder:text-slate-500 dark:placeholder:text-slate-400"
               />
             </div>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-[calc(100vh-280px)] overflow-y-auto pr-1">
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3.5">
             {productsLoading ? (
-              <div className="col-span-2 py-10 text-center text-slate-400 text-xs">Cargando inventario de medicamentos...</div>
+              <div className="col-span-full py-12 text-center text-slate-600 dark:text-slate-300 text-sm font-medium">
+                Cargando inventario de medicamentos...
+              </div>
             ) : filteredProducts.length === 0 ? (
-              <div className="col-span-2 py-10 text-center text-slate-400 text-xs">
+              <div className="col-span-full py-12 text-center text-slate-600 dark:text-slate-300 text-sm font-medium">
                 No se encontraron productos con "{searchTerm}".
               </div>
             ) : (
@@ -398,59 +400,59 @@ export const PointOfSaleView: React.FC = () => {
                 return (
                   <div
                     key={product.id}
-                    className={`p-3.5 rounded-xl border transition-all flex flex-col justify-between bg-white dark:bg-slate-900 ${
+                    className={`p-4 rounded-xl border transition-all flex flex-col justify-between bg-white dark:bg-slate-900 shadow-xs ${
                       outOfStock
-                        ? 'opacity-70 border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/40'
-                        : 'hover:border-emerald-500 dark:hover:border-emerald-600 hover:shadow-sm border-slate-200 dark:border-slate-800'
+                        ? 'opacity-75 border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/60'
+                        : 'hover:border-emerald-500 dark:hover:border-emerald-500 hover:shadow-md border-slate-200 dark:border-slate-800'
                     }`}
                   >
                     <div>
-                      <div className="flex items-start justify-between gap-1 mb-1">
-                        <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">
+                      <div className="flex items-start justify-between gap-1.5 mb-2 flex-wrap">
+                        <span className="text-[11px] font-mono font-bold text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded">
                           {product.codigo}
                         </span>
-                        <div className="flex items-center gap-1">
+                        <div className="flex items-center gap-1 flex-wrap">
                           {product.requiereReceta && (
-                            <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-amber-100 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300">
+                            <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-100 dark:bg-amber-950/80 text-amber-800 dark:text-amber-300 border border-amber-200 dark:border-amber-800/60">
                               Rx Receta
                             </span>
                           )}
                           {product.controlado && (
-                            <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-purple-100 dark:bg-purple-950/60 text-purple-700 dark:text-purple-300">
+                            <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-purple-100 dark:bg-purple-950/80 text-purple-800 dark:text-purple-300 border border-purple-200 dark:border-purple-800/60">
                               Controlado
                             </span>
                           )}
                           <span
-                            className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${
+                            className={`px-2 py-0.5 rounded text-[10px] font-bold border ${
                               outOfStock
-                                ? 'bg-rose-100 dark:bg-rose-950/60 text-rose-700 dark:text-rose-300'
+                                ? 'bg-rose-100 dark:bg-rose-950/80 text-rose-800 dark:text-rose-300 border-rose-200 dark:border-rose-800/60'
                                 : isLowStock
-                                ? 'bg-amber-100 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300'
-                                : 'bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300'
+                                ? 'bg-amber-100 dark:bg-amber-950/80 text-amber-800 dark:text-amber-300 border-amber-200 dark:border-amber-800/60'
+                                : 'bg-emerald-100 dark:bg-emerald-950/80 text-emerald-800 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800/60'
                             }`}
                           >
-                            {outOfStock ? 'Agotado' : `${product.stockTotal} disponibles`}
+                            {outOfStock ? 'Agotado' : `${product.stockTotal} disp.`}
                           </span>
                         </div>
                       </div>
 
-                      <h3 className="text-xs font-bold text-slate-900 dark:text-white line-clamp-1">
+                      <h3 className="text-sm font-bold text-slate-900 dark:text-white leading-snug">
                         {product.nombre}
                       </h3>
                       {product.generico && (
-                        <p className="text-[11px] text-slate-500 dark:text-slate-400 italic line-clamp-1">
+                        <p className="text-xs text-emerald-700 dark:text-emerald-400 font-medium mt-1 leading-snug">
                           DCI: {product.generico} {product.concentracion ? `• ${product.concentracion}` : ''}
                         </p>
                       )}
-                      <p className="text-[10px] text-slate-400 dark:text-slate-500 mt-0.5">
+                      <p className="text-xs text-slate-600 dark:text-slate-300 mt-1 font-medium">
                         {product.laboratorio ? `${product.laboratorio} • ` : ''}{product.presentacion || 'Unidad'}
                       </p>
                     </div>
 
-                    <div className="mt-3 pt-2.5 border-t border-slate-100 dark:border-slate-800/80 flex items-center justify-between">
+                    <div className="mt-4 pt-3 border-t border-slate-200/80 dark:border-slate-800 flex items-center justify-between gap-2">
                       <div>
-                        <span className="text-[10px] text-slate-400">Precio Venta</span>
-                        <div className="text-sm font-black text-slate-900 dark:text-white">
+                        <span className="text-[11px] font-semibold text-slate-600 dark:text-slate-300 block">Precio Venta</span>
+                        <div className="text-base font-black text-slate-900 dark:text-white">
                           S/ {product.precio.toFixed(2)}
                         </div>
                       </div>
@@ -460,7 +462,7 @@ export const PointOfSaleView: React.FC = () => {
                           type="button"
                           onClick={() => handleOpenSubstitutes(product)}
                           title="Ver alternativas y sustitutos genéricos"
-                          className="px-2 py-1 text-[10px] font-semibold rounded-lg bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 transition"
+                          className="px-2.5 py-1.5 text-xs font-bold rounded-lg bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 transition cursor-pointer"
                         >
                           Sustitutos
                         </button>
@@ -468,7 +470,7 @@ export const PointOfSaleView: React.FC = () => {
                           type="button"
                           onClick={() => addToCart(product)}
                           disabled={outOfStock}
-                          className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1 transition ${
+                          className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1 transition cursor-pointer ${
                             outOfStock
                               ? 'bg-slate-200 text-slate-400 dark:bg-slate-800 dark:text-slate-600 cursor-not-allowed'
                               : 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs'
@@ -487,7 +489,7 @@ export const PointOfSaleView: React.FC = () => {
         </div>
 
         {/* Carrito de Compra (Derecha) */}
-        <div className="lg:col-span-5 flex flex-col">
+        <div className="lg:col-span-4 flex flex-col lg:sticky lg:top-32">
           <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-xs flex-1 flex flex-col">
             <div className="p-4 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
               <div>

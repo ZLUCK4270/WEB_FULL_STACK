@@ -740,7 +740,7 @@ export const InventoryBatchesView: React.FC = () => {
                   </tr>
                 ) : (
                   kardex.map((m) => {
-                    const isIn = m.tipoMovimiento === 'ENTRADA' || m.tipoMovimiento === 'COMPRA' || m.tipoMovimiento === 'ANULACION_VENTA';
+                    const isIn = String(m.tipoMovimiento || '').includes('ENTRADA') || String(m.tipoMovimiento || '').includes('COMPRA') || String(m.tipoMovimiento || '').includes('ANULACION');
                     return (
                       <tr key={m.id} className="hover:bg-slate-50/70 dark:hover:bg-slate-800/40 transition">
                         <td className="py-2.5 px-4 text-[11px] text-slate-500 whitespace-nowrap">
