@@ -1,0 +1,290 @@
+/* =====================================================================
+   Nova Salud · Capa de movimiento (CSS puro, sin librerías)
+
+   Reglas de diseño de esta capa:
+   1. Todo vive en `@layer components`: las utilidades de Tailwind
+      (transition-*, scale-*, etc.) siguen teniendo prioridad.
+   2. Solo se animan `transform`, `translate`, `scale`, `rotate` y
+      `opacity` (se componen en la GPU, sin reflow ni repaint).
+   3. Los efectos de entrada usan `animation ... backwards` (no `forwards`):
+      al terminar, el elemento vuelve a sus estilos normales y no bloquea
+      los efectos de puntero (tilt, magnetic) que usan `transform`/`translate`.
+   4. El JS marca estados con atributos `data-*`, nunca con clases, porque
+      React reescribe `className` en cada render y borraría las clases.
+   5. `prefers-reduced-motion` lo desactiva todo.
+   ===================================================================== */
+
+:root {
+  --m-ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --m-ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+  --m-ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --m-fast: 160ms;
+  --m-base: 320ms;
+  --m-slow: 640ms;
+}
+
+/* ---------------------------------------------------------------------
+   Keyframes (fuera de @layer: las @keyframes no se pueden capear)
+   --------------------------------------------------------------------- */
+@keyframes m-reveal-up {
+  from { opacity: 0; transform: translate3d(0, 22px, 0); }
+  to   { opacity: 1; transform: translate3d(0, 0, 0); }
+}
+@keyframes m-reveal-left {
+  from { opacity: 0; transform: translate3d(-28px, 0, 0); }
+  to   { opacity: 1; transform: translate3d(0, 0, 0); }
+}
+@keyframes m-reveal-right {
+  from { opacity: 0; transform: translate3d(28px, 0, 0); }
+  to   { opacity: 1; transform: translate3d(0, 0, 0); }
+}
+@keyframes m-reveal-scale {
+  from { opacity: 0; transform: scale(0.94); }
+  to   { opacity: 1; transform: scale(1); }
+}
+@keyframes m-view-in {
+  from { opacity: 0; transform: translate3d(0, 8px, 0); }
+  to   { opacity: 1; transform: translate3d(0, 0, 0); }
+}
+@keyframes m-float {
+  from { transform: translate3d(0, 0, 0) scale(1); }
+  to   { transform: translate3d(36px, 28px, 0) scale(1.12); }
+}
+@keyframes m-float-alt {
+  from { transform: translate3d(0, 0, 0) scale(1.05); }
+  to   { transform: translate3d(-42px, -30px, 0) scale(0.95); }
+}
+@keyframes m-flow {
+  from { transform: translate3d(0, 0, 0); }
+  to   { transform: translate3d(-50%, 0, 0); }
+}
+@keyframes m-shimmer {
+  to { transform: translate3d(100%, 0, 0); }
+}
+@keyframes m-ring {
+  from { opacity: 0.55; transform: scale(1); }
+  to   { opacity: 0;    transform: scale(1.9); }
+}
+@keyframes m-ripple {
+  from { opacity: 0.28; transform: scale(0); }
+  to   { opacity: 0;    transform: scale(1); }
+}
+@keyframes m-press {
+  40% { scale: 0.96; }
+}
+@keyframes m-shake {
+  10%, 90%       { translate: -1px 0; }
+  20%, 80%       { translate: 2px 0; }
+  30%, 50%, 70%  { translate: -5px 0; }
+  40%, 60%       { translate: 5px 0; }
+}
+@keyframes m-pop {
+  0%   { opacity: 0; transform: scale(0.85); }
+  60%  { opacity: 1; transform: scale(1.04); }
+  100% { opacity: 1; transform: scale(1); }
+}
+
+@layer components {
+  /* -------------------------------------------------------------------
+     1. Reveal al hacer scroll   <div data-reveal="up|left|right|scale">
+        Solo se oculta si el JS ya arrancó (html.m-on): sin JS, todo se ve.
+        Escalonado: <div data-stagger="80"> en el padre.
+     ------------------------------------------------------------------- */
+  html.m-on [data-reveal]:not([data-in]) {
+    opacity: 0;
+  }
+  html.m-on [data-reveal][data-in] {
+    animation: m-reveal-up var(--m-slow) var(--m-ease-out) var(--m-delay, 0ms) backwards;
+  }
+  html.m-on [data-reveal="left"][data-in]  { animation-name: m-reveal-left; }
+  html.m-on [data-reveal="right"][data-in] { animation-name: m-reveal-right; }
+  html.m-on [data-reveal="scale"][data-in] { animation-name: m-reveal-scale; }
+
+  /* -------------------------------------------------------------------
+     2. Transición entre módulos (el contenedor se re-monta con `key`).
+        200 ms a propósito: en el POS la velocidad de atención manda.
+     ------------------------------------------------------------------- */
+  .m-view {
+    animation: m-view-in 200ms var(--m-ease-out) backwards;
+  }
+
+  /* -------------------------------------------------------------------
+     3. Efectos de puntero (los activa el JS por delegación de eventos)
+     ------------------------------------------------------------------- */
+  [data-magnetic] {
+    transition: translate 260ms var(--m-ease-out);
+    will-change: translate;
+  }
+
+  [data-tilt] {
+    transform-style: preserve-3d;
+    transition: transform 280ms var(--m-ease-out);
+  }
+
+  /* Foco de luz que sigue al cursor dentro de una tarjeta.
+     Es un pseudo-elemento fijo que se MUEVE con transform (GPU),
+     no un gradiente que se repinta en cada frame. */
+  [data-spotlight] {
+    position: relative;
+    overflow: hidden;
+    isolation: isolate;
+  }
+  [data-spotlight]::after {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 18rem;
+    height: 18rem;
+    border-radius: 9999px;
+    pointer-events: none;
+    z-index: -1;
+    opacity: 0;
+    background: radial-gradient(circle, rgb(20 184 166 / 0.2), transparent 65%);
+    transform: translate3d(calc(var(--mx, -999px) - 50%), calc(var(--my, -999px) - 50%), 0);
+    transition: opacity 280ms var(--m-ease-out);
+  }
+  [data-spotlight]:hover::after {
+    opacity: 1;
+  }
+
+  /* Ondas al pulsar */
+  [data-ripple] {
+    position: relative;
+    overflow: hidden;
+  }
+  .m-ripple-dot {
+    position: absolute;
+    border-radius: 9999px;
+    background: currentColor;
+    pointer-events: none;
+    transform: scale(0);
+    animation: m-ripple 620ms var(--m-ease-out) forwards;
+  }
+
+  /* Feedback táctil en todos los botones: pulso breve al pulsar.
+     Usa la propiedad `scale` (independiente de `transform`) y animation,
+     así no choca con las `transition-*` de Tailwind. */
+  button:not(:disabled):active,
+  [role="button"]:active {
+    animation: m-press 160ms var(--m-ease-out);
+  }
+
+  /* -------------------------------------------------------------------
+     4. Fondos vivos
+     ------------------------------------------------------------------- */
+  .m-float {
+    will-change: transform;
+    animation: m-float 18s var(--m-ease-in-out) infinite alternate;
+  }
+  .m-float-alt {
+    will-change: transform;
+    animation: m-float-alt 22s var(--m-ease-in-out) infinite alternate;
+  }
+
+  /* Gradiente animado sin repintar: una capa al 200 % de ancho con el
+     patrón repetido se desliza con translate (bucle sin saltos). */
+  .m-gradient-flow {
+    position: relative;
+    isolation: isolate;
+    overflow: hidden;
+  }
+  .m-gradient-flow::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    width: 200%;
+    z-index: -1;
+    pointer-events: none;
+    will-change: transform;
+    /* teal-700 → emerald-600: texto blanco encima con contraste suficiente (≥ 3,7:1; 5,5:1 en el extremo oscuro) */
+    background: linear-gradient(
+      90deg,
+      var(--m-g1, #0f766e) 0%,
+      var(--m-g2, #059669) 25%,
+      var(--m-g1, #0f766e) 50%,
+      var(--m-g2, #059669) 75%,
+      var(--m-g1, #0f766e) 100%
+    );
+    animation: m-flow 9s linear infinite;
+  }
+
+  /* -------------------------------------------------------------------
+     5. Microinteracciones sueltas
+     ------------------------------------------------------------------- */
+  .m-shake { animation: m-shake 460ms var(--m-ease-out); }
+  .m-pop   { animation: m-pop 420ms var(--m-ease-spring) backwards; }
+
+  /* Anillo pulsante para insignias de alerta: <span class="relative m-pulse-ring"> */
+  .m-pulse-ring { position: relative; }
+  .m-pulse-ring::before {
+    content: "";
+    position: absolute;
+    inset: -2px;
+    border: 2px solid currentColor;
+    border-radius: inherit;
+    pointer-events: none;
+    animation: m-ring 1.9s ease-out infinite;
+  }
+
+  /* Skeleton de carga */
+  .m-skeleton {
+    position: relative;
+    overflow: hidden;
+    border-radius: 0.5rem;
+    background: rgb(148 163 184 / 0.18);
+  }
+  .m-skeleton::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    transform: translate3d(-100%, 0, 0);
+    background: linear-gradient(90deg, transparent, rgb(255 255 255 / 0.4), transparent);
+    animation: m-shimmer 1.4s ease-in-out infinite;
+  }
+  .dark .m-skeleton::after {
+    background: linear-gradient(90deg, transparent, rgb(255 255 255 / 0.08), transparent);
+  }
+
+  /* Brillo de cursor (solo login; lo crea enableCursorGlow()) */
+  .m-cursor {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 28rem;
+    height: 28rem;
+    margin: -14rem 0 0 -14rem;
+    border-radius: 9999px;
+    pointer-events: none;
+    z-index: 5;
+    opacity: 0;
+    background: radial-gradient(circle, rgb(20 184 166 / 0.14), transparent 60%);
+    transition: opacity 400ms ease;
+    will-change: transform;
+  }
+  .m-cursor[data-on] {
+    opacity: 1;
+  }
+}
+
+/* ---------------------------------------------------------------------
+   Accesibilidad: quien pide menos movimiento, lo recibe.
+   --------------------------------------------------------------------- */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-delay: 0ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+  [data-reveal] {
+    opacity: 1 !important;
+  }
+  .m-cursor {
+    display: none !important;
+  }
+}
+

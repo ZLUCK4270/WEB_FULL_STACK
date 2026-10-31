@@ -462,13 +462,13 @@ export const PointOfSaleView: React.FC = () => {
 
       {/* Alertas y Notificaciones */}
       {errorMessage && (
-        <div className="p-3 rounded-lg bg-rose-50 dark:bg-rose-950/50 border border-rose-200 dark:border-rose-900 text-rose-700 dark:text-rose-300 text-xs flex items-center gap-2">
+        <div className="m-pop p-3 rounded-lg bg-rose-50 dark:bg-rose-950/50 border border-rose-200 dark:border-rose-900 text-rose-700 dark:text-rose-300 text-xs flex items-center gap-2">
           <AlertTriangle className="w-4 h-4 shrink-0" />
           <span>{errorMessage}</span>
         </div>
       )}
       {successMessage && (
-        <div className="p-3 rounded-lg bg-emerald-50 dark:bg-emerald-950/50 border border-emerald-200 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300 text-xs flex items-center gap-2 animate-in fade-in">
+        <div className="m-pop p-3 rounded-lg bg-emerald-50 dark:bg-emerald-950/50 border border-emerald-200 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300 text-xs flex items-center gap-2">
           <Sparkles className="w-4 h-4 shrink-0 text-emerald-500" />
           <span>{successMessage}</span>
         </div>
@@ -494,9 +494,20 @@ export const PointOfSaleView: React.FC = () => {
 
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3.5">
             {productsLoading ? (
-              <div className="col-span-full py-12 text-center text-slate-600 dark:text-slate-300 text-sm font-medium">
-                Cargando inventario de medicamentos...
-              </div>
+              <>
+                {[1, 2, 3, 4, 5, 6].map((idx) => (
+                  <div key={idx} className="p-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 space-y-3">
+                    <div className="h-4 w-24 m-skeleton" />
+                    <div className="h-5 w-3/4 m-skeleton" />
+                    <div className="h-3 w-1/2 m-skeleton" />
+                    <div className="pt-3 flex justify-between items-center">
+                      <div className="h-6 w-16 m-skeleton" />
+                      <div className="h-7 w-24 m-skeleton" />
+                    </div>
+                  </div>
+                ))}
+                <span className="sr-only">Cargando inventario de medicamentos...</span>
+              </>
             ) : filteredProducts.length === 0 ? (
               <div className="col-span-full py-12 text-center text-slate-600 dark:text-slate-300 text-sm font-medium">
                 No se encontraron productos con "{searchTerm}".

@@ -234,3 +234,38 @@ test('QA-TEST-05: Alertas de Stock/FEFO y Estadísticas de Dashboard operativas'
   const updatedAlert = alertsAfterData.alerts.find((a) => a.id === targetAlert.id);
   assert.equal(updatedAlert.estado, 'RESUELTA');
 });
+
+test('QA-TEST-06: Capa de Animaciones Nativas cumple GPU-only, prefers-reduced-motion y presupuesto cero-distracción en POS', async () => {
+  const fs = await import('node:fs');
+  const path = await import('node:path');
+  const root = process.cwd();
+
+  // 1. Verificar cero dependencias de librerías de animación (motion / framer-motion / gsap)
+  const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
+  const allDeps = { ...pkg.dependencies, ...pkg.devDependencies };
+  assert.equal(allDeps.motion, undefined, 'La librería motion no debe estar instalada');
+  assert.equal(allDeps['framer-motion'], undefined);
+
+  // 2. Verificar que motion.css usa @layer components, prefers-reduced-motion y solo propiedades de GPU en @keyframes
+  const motionCss = fs.readFileSync(path.join(root, 'src/styles/motion.css'), 'utf8');
+  assert.ok(motionCss.includes('@layer components'));
+  assert.ok(motionCss.includes('@media (prefers-reduced-motion: reduce)'));
+  assert.ok(motionCss.includes('animation: m-view-in 200ms'));
+
+  // Ningún @keyframes debe animar width, height, top, left, margin, box-shadow o background-position
+  const keyframesSection = motionCss.split('@layer components')[0];
+  for (const forbidden of ['width:', 'height:', 'top:', 'left:', 'margin:', 'box-shadow:', 'background-position:']) {
+    assert.equal(
+      keyframesSection.includes(forbidden),
+      false,
+      `Prohibido animar ${forbidden} en @keyframes`
+    );
+  }
+
+  // 3. Verificar que el POS (PointOfSaleView.tsx) NO incluye data-tilt, data-magnetic, data-parallax ni useCursorGlow
+  const posCode = fs.readFileSync(path.join(root, 'src/components/pos/PointOfSaleView.tsx'), 'utf8');
+  assert.equal(posCode.includes('data-tilt'), false);
+  assert.equal(posCode.includes('data-magnetic'), false);
+  assert.equal(posCode.includes('data-parallax'), false);
+  assert.equal(posCode.includes('useCursorGlow'), false);
+});

@@ -14,6 +14,7 @@ import { CustomersView } from './components/customers/CustomersView';
 import { AuditView } from './components/audit/AuditView';
 import { LoginView } from './components/auth/LoginView';
 import { ShieldAlert, ArrowLeft } from 'lucide-react';
+import { useMotion } from './hooks/useMotion';
 
 export type TabId =
   | 'dashboard'
@@ -116,7 +117,7 @@ const MainLayout: React.FC = () => {
                 </button>
               </div>
             ) : (
-              <>
+              <div key={currentTab} className="m-view">
                 {currentTab === 'dashboard' && <DashboardView onNavigate={handleNavigate} />}
                 {currentTab === 'pos' && <PointOfSaleView />}
                 {currentTab === 'sales' && <SalesHistoryView />}
@@ -126,7 +127,7 @@ const MainLayout: React.FC = () => {
                 {currentTab === 'alerts' && <ActiveAlertsView onNavigate={handleNavigate} />}
                 {currentTab === 'customers' && <CustomersView />}
                 {currentTab === 'audit' && <AuditView />}
-              </>
+              </div>
             )}
           </main>
 
@@ -148,6 +149,8 @@ const MainLayout: React.FC = () => {
 };
 
 export function App() {
+  useMotion();
+
   return (
     <LanguageProvider>
       <PharmacyProvider>

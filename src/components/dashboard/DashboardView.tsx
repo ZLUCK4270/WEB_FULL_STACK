@@ -16,6 +16,7 @@ import {
   Award,
 } from 'lucide-react';
 import { usePharmacy } from '../../context/PharmacyContext';
+import { CountUp } from '../common/CountUp';
 
 interface DashboardViewProps {
   onNavigate: (tab: string) => void;
@@ -64,7 +65,11 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
   return (
     <div className="space-y-6">
       {/* Banner principal de bienvenida y estado operativo */}
-      <div className="bg-gradient-to-r from-teal-700 via-teal-600 to-emerald-600 rounded-2xl p-6 text-white shadow-lg flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+      <div
+        data-reveal="up"
+        style={{ '--m-g1': '#0f766e', '--m-g2': '#059669' } as React.CSSProperties}
+        className="m-gradient-flow bg-gradient-to-r from-teal-700 via-teal-600 to-emerald-600 rounded-2xl p-6 text-white shadow-lg flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4"
+      >
         <div>
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/15 text-xs font-bold uppercase tracking-wider mb-2">
             <Sparkles className="w-3.5 h-3.5" />
@@ -82,6 +87,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
         <div className="flex flex-wrap items-center gap-3">
           <button
             onClick={() => onNavigate('pos')}
+            data-ripple
             className="px-4 py-2.5 rounded-xl bg-white text-teal-800 hover:bg-teal-50 font-bold text-xs flex items-center gap-2 shadow-sm transition-all cursor-pointer"
           >
             <ShoppingCart className="w-4 h-4" />
@@ -89,6 +95,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
           </button>
           <button
             onClick={() => onNavigate('alerts')}
+            data-ripple
             className="px-4 py-2.5 rounded-xl bg-teal-900/50 hover:bg-teal-900/70 text-white border border-white/20 font-bold text-xs flex items-center gap-2 transition-all cursor-pointer"
           >
             <Bell className="w-4 h-4" />
@@ -98,9 +105,12 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
       </div>
 
       {/* Tarjetas de KPIs principales */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+      <div data-stagger="80" className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
         <div
           onClick={() => onNavigate('sales')}
+          data-reveal="up"
+          data-tilt="5"
+          data-spotlight
           className="bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-xs hover:border-teal-500/50 transition-all cursor-pointer"
         >
           <div className="flex items-center justify-between mb-3">
@@ -112,7 +122,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
             </div>
           </div>
           <div className="text-2xl font-extrabold text-slate-900 dark:text-white">
-            S/ {todayRevenue.toFixed(2)}
+            <CountUp value={todayRevenue} decimals={2} prefix="S/ " />
           </div>
           <div className="mt-2 flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
             <span>Acumulado: S/ {totalRevenue.toFixed(2)}</span>
@@ -124,6 +134,9 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
 
         <div
           onClick={() => onNavigate('alerts')}
+          data-reveal="up"
+          data-tilt="5"
+          data-spotlight
           className="bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-xs hover:border-amber-500/50 transition-all cursor-pointer"
         >
           <div className="flex items-center justify-between mb-3">
@@ -135,7 +148,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
             </div>
           </div>
           <div className="text-2xl font-extrabold text-slate-900 dark:text-white">
-            {lowStockProducts.length} productos
+            <CountUp value={lowStockProducts.length} /> productos
           </div>
           <div className="mt-2 flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
             <span>{replenishmentSuggestions.length || lowStockProducts.length} sugerencias de compra</span>
@@ -147,6 +160,9 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
 
         <div
           onClick={() => onNavigate('inventory')}
+          data-reveal="up"
+          data-tilt="5"
+          data-spotlight
           className="bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-xs hover:border-rose-500/50 transition-all cursor-pointer"
         >
           <div className="flex items-center justify-between mb-3">
@@ -158,7 +174,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
             </div>
           </div>
           <div className="text-2xl font-extrabold text-slate-900 dark:text-white">
-            {expiringBatches.length} lotes
+            <CountUp value={expiringBatches.length} /> lotes
           </div>
           <div className="mt-2 flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
             <span>Control FEFO automatizado</span>
@@ -170,6 +186,9 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
 
         <div
           onClick={() => onNavigate('cash')}
+          data-reveal="up"
+          data-tilt="5"
+          data-spotlight
           className="bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-xs hover:border-indigo-500/50 transition-all cursor-pointer"
         >
           <div className="flex items-center justify-between mb-3">
@@ -181,7 +200,11 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
             </div>
           </div>
           <div className="text-2xl font-extrabold text-slate-900 dark:text-white">
-            {currentShift ? `S/ ${currentShift.efectivoEsperado.toFixed(2)}` : 'CAJA CERRADA'}
+            {currentShift ? (
+              <CountUp value={currentShift.efectivoEsperado} decimals={2} prefix="S/ " />
+            ) : (
+              'CAJA CERRADA'
+            )}
           </div>
           <div className="mt-2 flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
             <span>{products.length} medicamentos activos</span>
@@ -193,9 +216,9 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
       </div>
 
       {/* Tablas operativas: Productos con bajo stock y Lotes FEFO próximos a vencer */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div data-stagger="120" className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Productos que requieren reposición inmediata */}
-        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-xs overflow-hidden flex flex-col">
+        <div data-reveal="up" className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-xs overflow-hidden flex flex-col">
           <div className="p-5 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
             <div>
               <h3 className="font-bold text-slate-900 dark:text-white flex items-center gap-2 text-sm">
@@ -283,7 +306,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
         </div>
 
         {/* Lotes FEFO con vencimiento cercano o vencidos */}
-        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-xs overflow-hidden flex flex-col">
+        <div data-reveal="up" className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-xs overflow-hidden flex flex-col">
           <div className="p-5 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
             <div>
               <h3 className="font-bold text-slate-900 dark:text-white flex items-center gap-2 text-sm">

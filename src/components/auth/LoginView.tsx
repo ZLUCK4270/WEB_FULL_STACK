@@ -14,16 +14,25 @@ import {
 } from 'lucide-react';
 import { usePharmacy } from '../../context/PharmacyContext';
 import { useI18n } from '../../i18n/I18nContext';
+import { useCursorGlow } from '../../hooks/useMotion';
 
 export const LoginView: React.FC = () => {
   const { login } = usePharmacy();
   const { t } = useI18n();
+  useCursorGlow();
 
   const [dni, setDni] = useState('10203040');
   const [password, setPassword] = useState('regente2026');
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
+  const [errorTick, setErrorTick] = useState(0);
   const [loading, setLoading] = useState(false);
+
+  // Cada fallo incrementa el contador → el aviso se re-monta y vuelve a vibrar.
+  const showError = (message: string) => {
+    setError(message);
+    setErrorTick((n) => n + 1);
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -32,10 +41,10 @@ export const LoginView: React.FC = () => {
     try {
       const result = await login(dni.trim(), password);
       if (!result.success) {
-        setError(result.error || 'Credenciales inválidas. Verifique su DNI y contraseña.');
+        showError(result.error || 'Credenciales inválidas. Verifique su DNI y contraseña.');
       }
     } catch (err: any) {
-      setError(err.message || 'Error al iniciar sesión');
+      showError(err.message || 'Error al iniciar sesión');
     } finally {
       setLoading(false);
     }
@@ -49,18 +58,27 @@ export const LoginView: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col lg:flex-row relative overflow-hidden">
-      <div className="absolute -top-40 -left-40 w-96 h-96 bg-teal-500/20 rounded-full blur-3xl pointer-events-none" />
-      <div className="absolute -bottom-40 -right-40 w-96 h-96 bg-emerald-500/15 rounded-full blur-3xl pointer-events-none" />
+      <div
+        data-parallax="1"
+        className="m-float absolute -top-40 -left-40 w-96 h-96 bg-teal-500/20 rounded-full blur-3xl pointer-events-none"
+      />
+      <div
+        data-parallax="-0.8"
+        className="m-float-alt absolute -bottom-40 -right-40 w-96 h-96 bg-emerald-500/15 rounded-full blur-3xl pointer-events-none"
+      />
 
       {/* Left panel: Case Study & System Highlights */}
       <div className="lg:w-7/12 p-8 lg:p-14 flex flex-col justify-between border-b lg:border-b-0 lg:border-r border-slate-800/80 bg-slate-900/50 backdrop-blur-sm">
-        <div>
-          <div className="inline-flex items-center gap-3 px-3.5 py-1.5 rounded-full bg-teal-500/10 border border-teal-500/30 text-teal-300 text-xs font-bold uppercase tracking-wider mb-6">
+        <div data-stagger="90">
+          <div
+            data-reveal="up"
+            className="inline-flex items-center gap-3 px-3.5 py-1.5 rounded-full bg-teal-500/10 border border-teal-500/30 text-teal-300 text-xs font-bold uppercase tracking-wider mb-6"
+          >
             <Sparkles className="w-3.5 h-3.5" />
             Sistema Web Centralizado · DIGEMID / DIRIS BPA
           </div>
 
-          <div className="flex items-center gap-4 mb-6">
+          <div data-reveal="up" className="flex items-center gap-4 mb-6">
             <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-teal-500 to-emerald-600 flex items-center justify-center shadow-lg shadow-teal-600/30">
               <Activity className="w-8 h-8 text-white" />
             </div>
@@ -74,15 +92,15 @@ export const LoginView: React.FC = () => {
             </div>
           </div>
 
-          <p className="text-slate-300 text-sm lg:text-base leading-relaxed mb-8 max-w-2xl">
+          <p data-reveal="up" className="text-slate-300 text-sm lg:text-base leading-relaxed mb-8 max-w-2xl">
             Solución diseñada para optimizar la dispensación farmacéutica en zonas de alta demanda,
             eliminando quiebres de stock mediante alertas automáticas, control estricto de lotes
             FEFO (<em>First-Expire, First-Out</em>) y un Punto de Venta ágil con buscador de
             bioequivalentes DCI.
           </p>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 max-w-2xl">
-            <div className="p-4 rounded-2xl bg-slate-900/90 border border-slate-800/90">
+          <div data-stagger="110" className="grid grid-cols-1 sm:grid-cols-2 gap-4 max-w-2xl">
+            <div data-reveal="up" data-spotlight className="p-4 rounded-2xl bg-slate-900/90 border border-slate-800/90">
               <div className="flex items-center gap-2.5 text-teal-400 font-bold text-sm mb-1">
                 <CheckCircle2 className="w-4 h-4 shrink-0" />
                 Despacho FEFO Automatizado
@@ -93,7 +111,7 @@ export const LoginView: React.FC = () => {
               </p>
             </div>
 
-            <div className="p-4 rounded-2xl bg-slate-900/90 border border-slate-800/90">
+            <div data-reveal="up" data-spotlight className="p-4 rounded-2xl bg-slate-900/90 border border-slate-800/90">
               <div className="flex items-center gap-2.5 text-amber-400 font-bold text-sm mb-1">
                 <CheckCircle2 className="w-4 h-4 shrink-0" />
                 Motor de Alertas y Reposición
@@ -104,7 +122,7 @@ export const LoginView: React.FC = () => {
               </p>
             </div>
 
-            <div className="p-4 rounded-2xl bg-slate-900/90 border border-slate-800/90">
+            <div data-reveal="up" data-spotlight className="p-4 rounded-2xl bg-slate-900/90 border border-slate-800/90">
               <div className="flex items-center gap-2.5 text-emerald-400 font-bold text-sm mb-1">
                 <CheckCircle2 className="w-4 h-4 shrink-0" />
                 Atención Rápida y Sustitutos DCI
@@ -115,7 +133,7 @@ export const LoginView: React.FC = () => {
               </p>
             </div>
 
-            <div className="p-4 rounded-2xl bg-slate-900/90 border border-slate-800/90">
+            <div data-reveal="up" data-spotlight className="p-4 rounded-2xl bg-slate-900/90 border border-slate-800/90">
               <div className="flex items-center gap-2.5 text-indigo-400 font-bold text-sm mb-1">
                 <CheckCircle2 className="w-4 h-4 shrink-0" />
                 Seguridad JWT y Auditoría RBAC
@@ -136,7 +154,7 @@ export const LoginView: React.FC = () => {
 
       {/* Right panel: Login Form + Quick Role Switcher */}
       <div className="lg:w-5/12 p-8 lg:p-14 flex flex-col justify-center">
-        <div className="max-w-md w-full mx-auto">
+        <div data-reveal="left" className="max-w-md w-full mx-auto">
           <div className="mb-6">
             <h2 className="text-2xl font-extrabold text-white">{t('login_title')}</h2>
             <p className="text-sm text-slate-400 mt-1">
@@ -151,6 +169,7 @@ export const LoginView: React.FC = () => {
             <div className="grid grid-cols-3 gap-2.5">
               <button
                 type="button"
+                data-ripple
                 onClick={() => quickSelectRole('10203040', 'regente2026')}
                 className={`p-3 rounded-xl border text-left transition-all cursor-pointer ${
                   dni === '10203040'
@@ -165,6 +184,7 @@ export const LoginView: React.FC = () => {
 
               <button
                 type="button"
+                data-ripple
                 onClick={() => quickSelectRole('71829304', 'caja2026')}
                 className={`p-3 rounded-xl border text-left transition-all cursor-pointer ${
                   dni === '71829304'
@@ -179,6 +199,7 @@ export const LoginView: React.FC = () => {
 
               <button
                 type="button"
+                data-ripple
                 onClick={() => quickSelectRole('76543210', 'almacen2026')}
                 className={`p-3 rounded-xl border text-left transition-all cursor-pointer ${
                   dni === '76543210'
@@ -194,7 +215,11 @@ export const LoginView: React.FC = () => {
           </div>
 
           {error && (
-            <div className="mb-5 p-3.5 rounded-xl bg-rose-500/10 border border-rose-500/30 flex items-start gap-2.5 text-rose-300 text-xs font-medium">
+            <div
+              key={errorTick}
+              role="alert"
+              className="m-shake mb-5 p-3.5 rounded-xl bg-rose-500/10 border border-rose-500/30 flex items-start gap-2.5 text-rose-300 text-xs font-medium"
+            >
               <AlertCircle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
               <span>{error}</span>
             </div>
@@ -246,7 +271,9 @@ export const LoginView: React.FC = () => {
             <button
               type="submit"
               disabled={loading}
-              className="w-full py-3.5 px-5 rounded-xl bg-gradient-to-r from-teal-500 to-emerald-600 hover:from-teal-600 hover:to-emerald-700 text-white font-bold text-sm shadow-lg shadow-teal-600/25 transition-all disabled:opacity-50 cursor-pointer"
+              data-magnetic="0.18"
+              data-ripple
+              className="m-gradient-flow w-full py-3.5 px-5 rounded-xl bg-gradient-to-r from-teal-500 to-emerald-600 text-white font-bold text-sm shadow-lg shadow-teal-600/25 transition-all disabled:opacity-50 cursor-pointer"
             >
               {loading ? 'Autenticando credenciales...' : t('login_btn')}
             </button>
