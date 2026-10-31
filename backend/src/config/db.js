@@ -1052,7 +1052,7 @@ const tables = {
 };
 
 // Evaluate and synchronize alerts automatically
-function evaluateAlerts(targetProductIds = null) {
+function evaluateAlerts(targetProductIds = null, force = false) {
   const prods = targetProductIds && targetProductIds.length > 0
     ? tables.productos.filter(p => targetProductIds.includes(p.id))
     : tables.productos;
@@ -1082,11 +1082,23 @@ function evaluateAlerts(targetProductIds = null) {
         ? `SIN STOCK: "${p.nombre}" se encuentra agotado (0 uds. disponibles). Requiere orden de compra inmediata.`
         : `STOCK BAJO: "${p.nombre}" tiene ${totalStock} uds. disponibles (mínimo de seguridad: ${p.stock_minimo}).`;
 
-      const existing = tables.alertas_stock.find(
+      const existingPending = tables.alertas_stock.find(
         a => a.producto_id === p.id && a.tipo_alerta === alertType && a.estado === 'PENDIENTE'
       );
+      const existingResolved = tables.alertas_stock.find(
+        a => a.producto_id === p.id && a.tipo_alerta === alertType && (a.estado === 'RESUELTA' || a.estado === 'RESUELTO')
+      );
 
-      if (!existing) {
+      if (existingPending) {
+        existingPending.mensaje = message;
+      } else if (existingResolved) {
+        if (force) {
+          existingResolved.estado = 'PENDIENTE';
+          existingResolved.mensaje = message;
+          existingResolved.fecha_resolucion = null;
+          existingResolved.resuelto_por_id = null;
+        }
+      } else {
         tables.alertas_stock.push({
           id: uuidv4(),
           producto_id: p.id,
@@ -1108,41 +1120,64 @@ function evaluateAlerts(targetProductIds = null) {
   tables.lotes.forEach(l => {
     const p = tables.productos.find(pr => pr.id === l.producto_id);
     if (!p || p.esta_activo !== 1) return;
+    if (targetProductIds && targetProductIds.length > 0 && !targetProductIds.includes(p.id)) return;
 
     if (l.stock_actual > 0) {
       if (l.fecha_vencimiento < todayIso || l.estado === 'VENCIDO') {
         l.estado = 'VENCIDO';
         const msg = `LOTE VENCIDO (BLOQUEADO EN POS): Lote "${l.codigo_lote}" de "${p.nombre}" (${l.stock_actual} uds.) venció el ${l.fecha_vencimiento}.`;
-        if (!tables.alertas_stock.some(a => a.lote_id === l.id && (a.tipo_alerta === 'VENCIDO' || a.tipo_alerta === 'LOTE_VENCIDO') && a.estado === 'PENDIENTE')) {
-          tables.alertas_stock.push({
-            id: uuidv4(),
-            producto_id: p.id,
-            lote_id: l.id,
-            tipo_alerta: 'LOTE_VENCIDO',
-            estado: 'PENDIENTE',
-            mensaje: msg,
-            origen_disparador: 'AUTO_EVALUACION',
-            fecha_creacion: new Date().toISOString(),
-            fecha_resolucion: null,
-            resuelto_por_id: null
-          });
+        const pendingLotAlert = tables.alertas_stock.find(a => a.lote_id === l.id && (a.tipo_alerta === 'VENCIDO' || a.tipo_alerta === 'LOTE_VENCIDO') && a.estado === 'PENDIENTE');
+        const resolvedLotAlert = tables.alertas_stock.find(a => a.lote_id === l.id && (a.tipo_alerta === 'VENCIDO' || a.tipo_alerta === 'LOTE_VENCIDO') && (a.estado === 'RESUELTA' || a.estado === 'RESUELTO'));
+        if (!pendingLotAlert) {
+          if (resolvedLotAlert) {
+            if (force) {
+              resolvedLotAlert.estado = 'PENDIENTE';
+              resolvedLotAlert.mensaje = msg;
+              resolvedLotAlert.fecha_resolucion = null;
+              resolvedLotAlert.resuelto_por_id = null;
+            }
+          } else {
+            tables.alertas_stock.push({
+              id: uuidv4(),
+              producto_id: p.id,
+              lote_id: l.id,
+              tipo_alerta: 'LOTE_VENCIDO',
+              estado: 'PENDIENTE',
+              mensaje: msg,
+              origen_disparador: 'AUTO_EVALUACION',
+              fecha_creacion: new Date().toISOString(),
+              fecha_resolucion: null,
+              resuelto_por_id: null
+            });
+          }
         }
       } else if (l.estado === 'VIGENTE' && l.fecha_vencimiento <= thirtyDaysAhead) {
         const diffDays = Math.max(0, Math.ceil((new Date(l.fecha_vencimiento) - new Date(todayIso)) / 86400000));
         const msg = `PRIORIDAD FEFO — VENCE EN ${diffDays} DÍA(S): Lote "${l.codigo_lote}" de "${p.nombre}" (${l.stock_actual} uds.).`;
-        if (!tables.alertas_stock.some(a => a.lote_id === l.id && (a.tipo_alerta === 'VENCIMIENTO_CERCA' || a.tipo_alerta === 'VENCIMIENTO_PROXIMO') && a.estado === 'PENDIENTE')) {
-          tables.alertas_stock.push({
-            id: uuidv4(),
-            producto_id: p.id,
-            lote_id: l.id,
-            tipo_alerta: 'VENCIMIENTO_PROXIMO',
-            estado: 'PENDIENTE',
-            mensaje: msg,
-            origen_disparador: 'AUTO_EVALUACION',
-            fecha_creacion: new Date().toISOString(),
-            fecha_resolucion: null,
-            resuelto_por_id: null
-          });
+        const pendingExpAlert = tables.alertas_stock.find(a => a.lote_id === l.id && (a.tipo_alerta === 'VENCIMIENTO_CERCA' || a.tipo_alerta === 'VENCIMIENTO_PROXIMO') && a.estado === 'PENDIENTE');
+        const resolvedExpAlert = tables.alertas_stock.find(a => a.lote_id === l.id && (a.tipo_alerta === 'VENCIMIENTO_CERCA' || a.tipo_alerta === 'VENCIMIENTO_PROXIMO') && (a.estado === 'RESUELTA' || a.estado === 'RESUELTO'));
+        if (!pendingExpAlert) {
+          if (resolvedExpAlert) {
+            if (force) {
+              resolvedExpAlert.estado = 'PENDIENTE';
+              resolvedExpAlert.mensaje = msg;
+              resolvedExpAlert.fecha_resolucion = null;
+              resolvedExpAlert.resuelto_por_id = null;
+            }
+          } else {
+            tables.alertas_stock.push({
+              id: uuidv4(),
+              producto_id: p.id,
+              lote_id: l.id,
+              tipo_alerta: 'VENCIMIENTO_PROXIMO',
+              estado: 'PENDIENTE',
+              mensaje: msg,
+              origen_disparador: 'AUTO_EVALUACION',
+              fecha_creacion: new Date().toISOString(),
+              fecha_resolucion: null,
+              resuelto_por_id: null
+            });
+          }
         }
       }
     }

@@ -123,7 +123,7 @@ const MainLayout: React.FC = () => {
                 {currentTab === 'inventory' && <InventoryBatchesView />}
                 {currentTab === 'cash' && <CashRegisterView />}
                 {currentTab === 'purchases' && <PurchasesView />}
-                {currentTab === 'alerts' && <ActiveAlertsView />}
+                {currentTab === 'alerts' && <ActiveAlertsView onNavigate={handleNavigate} />}
                 {currentTab === 'customers' && <CustomersView />}
                 {currentTab === 'audit' && <AuditView />}
               </>

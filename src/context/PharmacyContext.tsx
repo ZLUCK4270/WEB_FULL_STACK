@@ -500,7 +500,8 @@ export const PharmacyProvider: React.FC<{ children: ReactNode }> = ({ children }
         resueltoPor: a.resuelto_por_nombre
       }));
       setAlerts(mapped);
-      setPendingAlerts(countRes.pendingAlerts || mapped.length);
+      const pendingCount = mapped.filter(a => String(a.estado).toUpperCase() === 'PENDIENTE').length;
+      setPendingAlerts(countRes.pendingAlerts !== undefined ? Number(countRes.pendingAlerts) : pendingCount);
     } catch (err: any) {
       setApiError(extractError(err, 'Error al cargar alertas'));
     }
@@ -863,22 +864,22 @@ export const PharmacyProvider: React.FC<{ children: ReactNode }> = ({ children }
   const generateAlerts = useCallback(async () => {
     try {
       const response = await alertsApi.generateAlerts();
-      await loadAlerts();
+      await Promise.all([loadAlerts(), loadStats()]);
       return { success: true, pendingCount: response.pendingCount };
     } catch (err: any) {
       return { success: false, error: extractError(err, 'Error al generar alertas') };
     }
-  }, [loadAlerts]);
+  }, [loadAlerts, loadStats]);
 
   const resolveAlert = useCallback(async (id: string) => {
     try {
       await alertsApi.resolveAlert(id);
-      await loadAlerts();
+      await Promise.all([loadAlerts(), loadStats()]);
       return { success: true };
     } catch (err: any) {
       return { success: false, error: extractError(err, 'Error al resolver alerta') };
     }
-  }, [loadAlerts]);
+  }, [loadAlerts, loadStats]);
 
   const refreshAll = useCallback(async () => {
     await Promise.all([

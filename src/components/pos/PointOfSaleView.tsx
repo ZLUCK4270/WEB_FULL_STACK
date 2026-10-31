@@ -215,7 +215,67 @@ export const PointOfSaleView: React.FC = () => {
   const handleOpenCheckout = () => {
     if (cart.length === 0) return;
     setAmountPaid(cartTotal);
+    setErrorMessage(null);
     setIsCheckoutOpen(true);
+  };
+
+  const handleReceiptTypeChange = (type: ReceiptType) => {
+    setReceiptType(type);
+    setErrorMessage(null);
+    if (type === 'factura') {
+      // Si ya hay un cliente con RUC seleccionado (11 dígitos), mantenerlo; de lo contrario, limpiar para pedir RUC
+      const currentClean = customerDoc.replace(/\D/g, '');
+      if (currentClean.length !== 11) {
+        const existingRucCustomer = customers.find(
+          (c) => c.tipoDocumento === 'RUC' || c.numeroDocumento.trim().length === 11
+        );
+        if (existingRucCustomer) {
+          setSelectedCustomerId(existingRucCustomer.id);
+          setCustomerDoc(existingRucCustomer.numeroDocumento);
+          setCustomerName(existingRucCustomer.nombreCompleto);
+        } else {
+          setSelectedCustomerId(null);
+          setCustomerDoc('');
+          setCustomerName('');
+        }
+      }
+    } else if (type === 'boleta') {
+      // Si veníamos de un RUC de 11 dígitos o vacío, volver a Público General (00000000) o DNI
+      if (!customerDoc || customerDoc.replace(/\D/g, '').length === 11) {
+        setSelectedCustomerId(null);
+        setCustomerDoc('00000000');
+        setCustomerName('Público General');
+      }
+    } else {
+      // Ticket simplificado
+      setSelectedCustomerId(null);
+      setCustomerDoc('00000000');
+      setCustomerName('Público General');
+    }
+  };
+
+  const handleCheckoutDocChange = (rawValue: string) => {
+    const digits = rawValue.replace(/\D/g, '').slice(0, receiptType === 'factura' ? 11 : 8);
+    setCustomerDoc(digits);
+    const matched = customers.find((c) => c.numeroDocumento === digits);
+    if (matched) {
+      setSelectedCustomerId(matched.id);
+      setCustomerName(matched.nombreCompleto);
+    } else {
+      setSelectedCustomerId(null);
+      if (digits === '00000000' || digits === '') {
+        setCustomerName(receiptType === 'factura' ? '' : 'Público General');
+      } else if (customerName === 'Público General') {
+        setCustomerName('');
+      }
+    }
+  };
+
+  const handleFillRandomDni = () => {
+    const randomDni = String(Math.floor(10000000 + Math.random() * 80000000));
+    setSelectedCustomerId(null);
+    setCustomerDoc(randomDni);
+    setCustomerName(`Cliente Eventual (DNI ${randomDni})`);
   };
 
   const handleOpenSubstitutes = async (product: Product) => {
@@ -233,20 +293,69 @@ export const PointOfSaleView: React.FC = () => {
 
   const handleConfirmSale = async () => {
     setErrorMessage(null);
+
+    const cleanDoc = customerDoc.replace(/\D/g, '');
+    let finalCustomerId = selectedCustomerId;
+    let finalDoc = cleanDoc || '00000000';
+    let finalName = customerName.trim() || 'Público General';
+
+    // Validación según tipo de comprobante
+    if (receiptType === 'factura') {
+      if (cleanDoc.length !== 11) {
+        setErrorMessage('Para emitir FACTURA es obligatorio ingresar un número de RUC válido de 11 dígitos.');
+        return;
+      }
+      if (!finalName || finalName === 'Público General') {
+        finalName = `Empresa RUC ${cleanDoc}`;
+      }
+    } else if (receiptType === 'boleta') {
+      if (cleanDoc && cleanDoc !== '00000000' && cleanDoc.length !== 8) {
+        setErrorMessage('Para BOLETA el DNI debe tener 8 dígitos, o elija "Sin DNI / Público General".');
+        return;
+      }
+      if (!cleanDoc || cleanDoc === '00000000') {
+        finalDoc = '00000000';
+        finalName = finalName && finalName !== 'Público General' ? finalName : 'Público General';
+      } else if (!finalName || finalName === 'Público General') {
+        finalName = `Cliente DNI ${cleanDoc}`;
+      }
+    }
+
     setSubmitting(true);
     try {
+      // Si el cliente ingresó un DNI o RUC específico que aún no existe en el padrón, lo registramos o asociamos automáticamente
+      if (finalDoc !== '00000000' && !finalCustomerId) {
+        const existing = customers.find((c) => c.numeroDocumento === finalDoc);
+        if (existing) {
+          finalCustomerId = existing.id;
+          finalName = existing.nombreCompleto;
+        } else {
+          const created = await createCustomer({
+            tipoDocumento: receiptType === 'factura' ? 'RUC' : 'DNI',
+            numeroDocumento: finalDoc,
+            nombreCompleto: finalName,
+            telefono: ''
+          });
+          if (created.success && created.customerId) {
+            finalCustomerId = created.customerId;
+          }
+        }
+      }
+
       const result = await createSale({
         items: cart.map((i) => ({ productId: i.product.id, quantity: i.quantity })),
         paymentMethod,
         amountPaid: paymentMethod === 'efectivo' ? amountPaid : cartTotal,
-        customerId: selectedCustomerId || undefined,
+        customerId: finalCustomerId || undefined,
         receiptType
       });
       if (result.success && result.sale) {
-        setSuccessMessage(`Venta ${result.sale.codigoVenta} registrada correctamente con FEFO.`);
+        setSuccessMessage(`Venta ${result.sale.codigoVenta} (${receiptType.toUpperCase()}) registrada correctamente con FEFO.`);
         setCompletedSale({
           ...result.sale,
           receiptType,
+          cliente: finalName,
+          clienteDoc: finalDoc,
           amountPaid: paymentMethod === 'efectivo' ? amountPaid : cartTotal
         });
         setIsCheckoutOpen(false);
@@ -452,7 +561,7 @@ export const PointOfSaleView: React.FC = () => {
                     <div className="mt-4 pt-3 border-t border-slate-200/80 dark:border-slate-800 flex items-center justify-between gap-2">
                       <div>
                         <span className="text-[11px] font-semibold text-slate-600 dark:text-slate-300 block">Precio Venta</span>
-                        <div className="text-base font-black text-slate-900 dark:text-white">
+                        <div className="text-base font-black text-slate-900 dark:text-white whitespace-nowrap">
                           S/ {product.precio.toFixed(2)}
                         </div>
                       </div>
@@ -777,8 +886,8 @@ export const PointOfSaleView: React.FC = () => {
 
       {/* Modal de Checkout / Cobro */}
       {isCheckoutOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-xs animate-in fade-in">
-          <div className="bg-white dark:bg-slate-900 rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-slate-200 dark:border-slate-800 space-y-5">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-xs animate-in fade-in overflow-y-auto">
+          <div className="bg-white dark:bg-slate-900 rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-slate-200 dark:border-slate-800 space-y-4 my-auto">
             <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800">
               <h3 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
                 <Receipt className="w-5 h-5 text-emerald-500" />
@@ -789,26 +898,172 @@ export const PointOfSaleView: React.FC = () => {
               </button>
             </div>
 
+            {errorMessage && (
+              <div className="p-2.5 rounded-lg bg-rose-50 dark:bg-rose-950/60 border border-rose-200 dark:border-rose-800 text-rose-700 dark:text-rose-300 text-xs flex items-center gap-2">
+                <AlertTriangle className="w-4 h-4 shrink-0" />
+                <span>{errorMessage}</span>
+              </div>
+            )}
+
             {/* Tipo de Comprobante */}
             <div className="space-y-1.5">
               <label className="text-xs font-bold text-slate-700 dark:text-slate-300">Tipo de Comprobante:</label>
               <div className="grid grid-cols-3 gap-2">
-                {(['boleta', 'factura', 'ticket'] as ReceiptType[]).map((type) => (
+                {([
+                  { id: 'boleta', label: 'Boleta (DNI)' },
+                  { id: 'factura', label: 'Factura (RUC)' },
+                  { id: 'ticket', label: 'Ticket Simple' }
+                ] as { id: ReceiptType; label: string }[]).map((item) => (
                   <button
-                    key={type}
+                    key={item.id}
                     type="button"
-                    onClick={() => setReceiptType(type)}
-                    className={`py-2 px-3 rounded-lg border text-xs font-bold uppercase transition ${
-                      receiptType === type
+                    onClick={() => handleReceiptTypeChange(item.id)}
+                    className={`py-2 px-3 rounded-lg border text-xs font-bold uppercase transition cursor-pointer ${
+                      receiptType === item.id
                         ? 'border-emerald-500 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300'
-                        : 'border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:bg-slate-50'
+                        : 'border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800'
                     }`}
                   >
-                    {type}
+                    {item.label}
                   </button>
                 ))}
               </div>
             </div>
+
+            {/* Datos de DNI (Boleta) o RUC (Factura) */}
+            {receiptType === 'boleta' && (
+              <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 space-y-2.5">
+                <div className="flex items-center justify-between flex-wrap gap-1.5">
+                  <span className="text-xs font-bold text-slate-800 dark:text-slate-200">
+                    Datos del Cliente (Boleta - DNI)
+                  </span>
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedCustomerId(null);
+                        setCustomerDoc('00000000');
+                        setCustomerName('Público General');
+                      }}
+                      className="px-2 py-1 rounded text-[10px] font-bold bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 text-slate-700 dark:text-slate-200 hover:bg-slate-100 cursor-pointer"
+                    >
+                      Sin DNI (Público General)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleFillRandomDni}
+                      className="px-2 py-1 rounded text-[10px] font-bold bg-emerald-100 dark:bg-emerald-950/70 border border-emerald-300 dark:border-emerald-800 text-emerald-800 dark:text-emerald-300 hover:bg-emerald-200 cursor-pointer"
+                    >
+                      DNI Cualquiera (8 dígitos)
+                    </button>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-12 gap-2.5">
+                  <div className="sm:col-span-5">
+                    <label className="text-[11px] font-semibold text-slate-600 dark:text-slate-300">
+                      N° de DNI (8 dígitos o 00000000)
+                    </label>
+                    <input
+                      type="text"
+                      maxLength={8}
+                      placeholder="Ej. 45892134 o 00000000"
+                      value={customerDoc}
+                      onChange={(e) => handleCheckoutDocChange(e.target.value)}
+                      className="w-full mt-1 p-2 text-xs font-mono font-bold rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-white"
+                    />
+                  </div>
+                  <div className="sm:col-span-7">
+                    <label className="text-[11px] font-semibold text-slate-600 dark:text-slate-300">
+                      Nombre del Cliente (opcional)
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="Público General o Nombre"
+                      value={customerName}
+                      onChange={(e) => setCustomerName(e.target.value)}
+                      className="w-full mt-1 p-2 text-xs font-semibold rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-white"
+                    />
+                  </div>
+                </div>
+                <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                  Si el cliente no desea brindar su DNI, puede dejar <strong>00000000 (Público General)</strong> o pulsar <strong>"DNI Cualquiera"</strong>.
+                </p>
+              </div>
+            )}
+
+            {receiptType === 'factura' && (
+              <div className="p-3.5 rounded-xl bg-amber-50/60 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800/80 space-y-2.5">
+                <div className="flex items-center justify-between flex-wrap gap-1.5">
+                  <span className="text-xs font-bold text-amber-900 dark:text-amber-300">
+                    Datos Fiscales Obligatorios (Factura - RUC 11 dígitos)
+                  </span>
+                  <div className="flex items-center gap-1.5">
+                    {customers
+                      .filter((c) => c.tipoDocumento === 'RUC' || c.numeroDocumento.trim().length === 11)
+                      .slice(0, 1)
+                      .map((rucCust) => (
+                        <button
+                          key={rucCust.id}
+                          type="button"
+                          onClick={() => {
+                            setSelectedCustomerId(rucCust.id);
+                            setCustomerDoc(rucCust.numeroDocumento);
+                            setCustomerName(rucCust.nombreCompleto);
+                            setErrorMessage(null);
+                          }}
+                          className="px-2 py-1 rounded text-[10px] font-bold bg-white dark:bg-slate-800 border border-amber-300 dark:border-amber-700 text-amber-800 dark:text-amber-300 hover:bg-amber-100 cursor-pointer"
+                        >
+                          Usar {rucCust.numeroDocumento}
+                        </button>
+                      ))}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedCustomerId(null);
+                        setCustomerDoc('20512345678');
+                        setCustomerName('Corporación Médica del Perú S.A.C.');
+                        setErrorMessage(null);
+                      }}
+                      className="px-2 py-1 rounded text-[10px] font-bold bg-amber-100 dark:bg-amber-900/60 border border-amber-300 dark:border-amber-700 text-amber-900 dark:text-amber-200 hover:bg-amber-200 cursor-pointer"
+                    >
+                      RUC Rápido (11 dígitos)
+                    </button>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-12 gap-2.5">
+                  <div className="sm:col-span-5">
+                    <label className="text-[11px] font-bold text-slate-700 dark:text-slate-200">
+                      Número de RUC (11 dígitos) *
+                    </label>
+                    <input
+                      type="text"
+                      maxLength={11}
+                      placeholder="Ej. 20601425369"
+                      value={customerDoc}
+                      onChange={(e) => handleCheckoutDocChange(e.target.value)}
+                      className="w-full mt-1 p-2 text-xs font-mono font-bold rounded-lg border border-amber-300 dark:border-amber-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white"
+                    />
+                  </div>
+                  <div className="sm:col-span-7">
+                    <label className="text-[11px] font-bold text-slate-700 dark:text-slate-200">
+                      Razón Social / Empresa *
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="Ej. Policlínico San Gabriel S.A.C."
+                      value={customerName}
+                      onChange={(e) => setCustomerName(e.target.value)}
+                      className="w-full mt-1 p-2 text-xs font-semibold rounded-lg border border-amber-300 dark:border-amber-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white"
+                    />
+                  </div>
+                </div>
+                <p className="text-[11px] text-amber-800 dark:text-amber-300/90">
+                  La emisión de Factura Electrónica requiere un número de RUC válido de 11 dígitos (iniciado en 10 o 20).
+                </p>
+              </div>
+            )}
 
             {/* Monto Total */}
             <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/60 text-center space-y-1">
@@ -953,8 +1208,14 @@ export const PointOfSaleView: React.FC = () => {
             <div className="space-y-1 text-[11px] border-b border-dashed border-slate-300 pb-2">
               <div>Fecha: {new Date(completedSale.fecha || Date.now()).toLocaleString('es-PE')}</div>
               <div>Cajero: {completedSale.cajero || user?.name}</div>
-              <div>Cliente: {completedSale.cliente || customerName}</div>
-              <div>Doc: {completedSale.clienteDoc || customerDoc || '-'}</div>
+              <div>
+                {completedSale.receiptType === 'factura' ? 'Razón Social: ' : 'Cliente: '}
+                {completedSale.cliente || customerName}
+              </div>
+              <div>
+                {completedSale.receiptType === 'factura' ? 'RUC: ' : 'DNI: '}
+                {completedSale.clienteDoc || customerDoc || '00000000'}
+              </div>
               <div>Pago: {String(completedSale.metodoPago || 'efectivo').toUpperCase()}</div>
             </div>
 

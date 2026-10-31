@@ -206,4 +206,31 @@ test('QA-TEST-05: Alertas de Stock/FEFO y Estadísticas de Dashboard operativas'
   const alertsData = await alertsRes.json();
   assert.ok(Array.isArray(alertsData.alerts));
   assert.ok(alertsData.alerts.length > 0);
+
+  // Verificar que al marcar una alerta como atendida (PATCH /api/alerts/:id/resolve)
+  // disminuye el contador de alertas pendientes y NO vuelve a recrearse al listar alertas
+  const countBeforeRes = await requestApp('GET', '/api/alerts/count', {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  const { pendingAlerts: beforeCount } = await countBeforeRes.json();
+  const targetAlert = alertsData.alerts.find((a) => a.estado === 'PENDIENTE');
+  assert.ok(targetAlert, 'Debe existir al menos una alerta pendiente');
+
+  const resolveRes = await requestApp('PATCH', `/api/alerts/${targetAlert.id}/resolve`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  assert.equal(resolveRes.status, 200);
+
+  const countAfterRes = await requestApp('GET', '/api/alerts/count', {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  const { pendingAlerts: afterCount } = await countAfterRes.json();
+  assert.equal(afterCount, beforeCount - 1);
+
+  const alertsAfterRes = await requestApp('GET', '/api/alerts', {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  const alertsAfterData = await alertsAfterRes.json();
+  const updatedAlert = alertsAfterData.alerts.find((a) => a.id === targetAlert.id);
+  assert.equal(updatedAlert.estado, 'RESUELTA');
 });

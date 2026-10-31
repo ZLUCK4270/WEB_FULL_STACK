@@ -2,7 +2,7 @@ const { getPool, evaluateAlerts } = require('../config/db');
 
 async function generateAlerts(req, res) {
   try {
-    evaluateAlerts();
+    evaluateAlerts(null, true);
     const pool = await getPool();
     const countResult = await pool.request().query(`SELECT COUNT(*) AS c FROM alertas_stock WHERE estado = 'PENDIENTE'`);
     const count = parseInt(countResult.recordset[0]?.c ?? countResult.recordset[0]?.pendingCount ?? 0, 10) || 0;
@@ -14,7 +14,6 @@ async function generateAlerts(req, res) {
 
 async function listAlerts(req, res) {
   try {
-    evaluateAlerts();
     const pool = await getPool();
     const { estado } = req.query;
     const request = pool.request();
