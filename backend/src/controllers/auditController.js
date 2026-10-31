@@ -10,7 +10,7 @@ async function listAuditLogs(req, res) {
       LEFT JOIN perfiles_usuario u ON a.usuario_id = u.id
       ORDER BY a.fecha_creacion DESC
     `);
-    res.json({ auditLogs: result.recordset });
+    res.json({ success: true, auditLogs: result.recordset, logs: result.recordset });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }

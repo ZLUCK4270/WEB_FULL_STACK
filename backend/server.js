@@ -14,50 +14,36 @@ const customersRoutes = require('./src/routes/customersRoutes');
 const backupRoutes = require('./src/routes/backupRoutes');
 const dashboardRoutes = require('./src/routes/dashboardRoutes');
 
-const app = express();
-const PORT = process.env.PORT || 8081;
+const apiRouter = express.Router();
 
-// Cabeceras de seguridad reforzadas (equivalente nativo a helmet)
-app.use((req, res, next) => {
-  res.setHeader('X-Content-Type-Options', 'nosniff');
-  res.setHeader('X-Frame-Options', 'DENY');
-  res.setHeader('X-XSS-Protection', '1; mode=block');
-  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
-  res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
-  res.setHeader('Content-Security-Policy', "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'");
-  next();
-});
-
-// CORS: en producción restringir a CORS_ORIGIN; en desarrollo se espeja el origen.
-const corsOrigin = process.env.CORS_ORIGIN || (process.env.NODE_ENV === 'production' ? false : '*');
-app.use(cors({ origin: corsOrigin, credentials: true }));
-
-app.use(express.json({ limit: '10mb' }));
+// CORS
+apiRouter.use(cors());
+apiRouter.use(express.json({ limit: '10mb' }));
 
 // Rutas de la API
-app.use('/api/auth', authRoutes);
-app.use('/api/sales', salesRoutes);
-app.use('/api/inventory', inventoryRoutes);
-app.use('/api/cash', cashRoutes);
-app.use('/api/alerts', alertsRoutes);
-app.use('/api/audit', auditRoutes);
-app.use('/api/purchases', purchasesRoutes);
-app.use('/api/customers', customersRoutes);
-app.use('/api/backups', backupRoutes);
-app.use('/api/dashboard', dashboardRoutes);
+apiRouter.use('/auth', authRoutes);
+apiRouter.use('/sales', salesRoutes);
+apiRouter.use('/inventory', inventoryRoutes);
+apiRouter.use('/cash', cashRoutes);
+apiRouter.use('/alerts', alertsRoutes);
+apiRouter.use('/audit', auditRoutes);
+apiRouter.use('/purchases', purchasesRoutes);
+apiRouter.use('/customers', customersRoutes);
+apiRouter.use('/backups', backupRoutes);
+apiRouter.use('/dashboard', dashboardRoutes);
 
 // Ruta de salud
-app.get('/api/health', (req, res) => {
+apiRouter.get('/health', (req, res) => {
   res.json({ status: 'ok', service: 'novasalud-backend', timestamp: new Date().toISOString() });
 });
 
-// Manejo de rutas no encontradas
-app.use((req, res) => {
+// Manejo de rutas no encontradas dentro de /api
+apiRouter.use((req, res) => {
   res.status(404).json({ error: 'Ruta no encontrada' });
 });
 
-// Manejo global de errores (no filtra stacktrace al cliente en producción)
-app.use((err, req, res, next) => {
+// Manejo de errores dentro de /api
+apiRouter.use((err, req, res, next) => {
   console.error(err.stack);
   const isProduction = process.env.NODE_ENV === 'production';
   res.status(err.status || 500).json({
@@ -65,24 +51,30 @@ app.use((err, req, res, next) => {
   });
 });
 
-process.on('SIGINT', async () => {
-  await closePool();
-  process.exit(0);
-});
+const app = express();
+const PORT = process.env.PORT || 8081;
 
-process.on('SIGTERM', async () => {
-  await closePool();
-  process.exit(0);
-});
+app.use('/api', apiRouter);
 
-app.listen(PORT, async () => {
-  try {
-    await getPool();
-    console.log(`Servidor backend escuchando en puerto ${PORT}`);
-    console.log('Conectado a SQL Server');
-  } catch (err) {
-    console.error('Error conectando a SQL Server:', err.message);
-  }
-});
+if (require.main === module) {
+  process.on('SIGINT', async () => {
+    await closePool();
+    process.exit(0);
+  });
 
-module.exports = app;
+  process.on('SIGTERM', async () => {
+    await closePool();
+    process.exit(0);
+  });
+
+  app.listen(PORT, async () => {
+    try {
+      await getPool();
+      console.log(`Servidor backend escuchando en puerto ${PORT}`);
+    } catch (err) {
+      console.error('Error conectando a BD:', err.message);
+    }
+  });
+}
+
+module.exports = { app, apiRouter };

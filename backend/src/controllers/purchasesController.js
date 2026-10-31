@@ -1,11 +1,12 @@
-const { getPool } = require('../config/db');
+const { getPool, sql, mockTables, evaluateAlerts } = require('../config/db');
+const { v4: uuidv4 } = require('uuid');
 
 async function listPurchases(req, res) {
   try {
     const pool = await getPool();
     const result = await pool.request().query(`
-      SELECT p.id, p.codigo_compra, p.estado, p.monto_total, p.fecha_creacion,
-             pr.razon_social AS proveedor,
+      SELECT p.id, p.codigo_compra, p.estado, p.monto_total, p.fecha_creacion, p.numero_factura, p.fecha_factura,
+             pr.razon_social AS proveedor, pr.id AS proveedor_id,
              u.nombre + ' ' + u.apellido AS comprador
       FROM compras p
       LEFT JOIN proveedores pr ON p.proveedor_id = pr.id
@@ -18,77 +19,114 @@ async function listPurchases(req, res) {
   }
 }
 
+async function getPurchase(req, res) {
+  try {
+    const { id } = req.params;
+    const pool = await getPool();
+    const result = await pool.request()
+      .input('id', id)
+      .query('SELECT * FROM compras WHERE id = @id');
+
+    if (result.recordset.length === 0) {
+      return res.status(404).json({ error: 'Orden de compra no encontrada' });
+    }
+
+    res.json({ purchase: result.recordset[0] });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+}
+
 async function createPurchase(req, res) {
   try {
-    const { supplierId, items, invoiceNumber, invoiceDate, notes, totalAmount } = req.body;
+    const { supplierId, items, invoiceNumber, invoiceDate, notes } = req.body;
     const buyerId = req.user.id;
 
-    if (!supplierId || !items || items.length === 0) {
-      return res.status(400).json({ error: 'Proveedor e ítems requeridos' });
+    if (!supplierId || !items || !Array.isArray(items) || items.length === 0) {
+      return res.status(400).json({ error: 'Proveedor e ítems requeridos para la orden de compra' });
     }
 
     const pool = await getPool();
-    const transaction = new (require('mssql')).Transaction(pool);
-    await transaction.begin();
 
-    try {
-      // Generar código de compra
-      const countResult = await transaction.request().query('SELECT COUNT(*) AS total FROM compras');
-      const nextCorrelativo = String(countResult.recordset[0].total + 1).padStart(8, '0');
-      const purchaseCode = `OC-2026-${nextCorrelativo}`;
+    // Recalcular montos en el servidor (no confiar en montos enviados por el cliente)
+    let calculatedTotal = 0;
+    const sanitizedItems = [];
 
-      // Insertar compra
-      const purchaseResult = await transaction.request()
-        .input('purchaseCode', purchaseCode)
-        .input('supplierId', supplierId)
-        .input('buyerId', buyerId)
-        .input('invoiceNumber', invoiceNumber || null)
-        .input('invoiceDate', invoiceDate || null)
-        .input('totalAmount', totalAmount || 0)
-        .input('notes', notes || null)
-        .query(`
-          INSERT INTO compras (codigo_compra, proveedor_id, comprador_id, numero_factura, fecha_factura, monto_total, notas, estado)
-          OUTPUT INSERTED.id
-          VALUES (@purchaseCode, @supplierId, @buyerId, @invoiceNumber, @invoiceDate, @totalAmount, @notes, 'REGISTRADA')
-        `);
-
-      const purchaseId = purchaseResult.recordset[0].id;
-
-      // Insertar ítems de compra
-      for (const item of items) {
-        await transaction.request()
-          .input('purchaseId', purchaseId)
-          .input('productId', item.productId)
-          .input('quantityOrdered', item.quantity)
-          .input('quantityReceived', 0)
-          .input('unitCost', item.unitCost)
-          .input('subtotal', item.subtotal)
-          .query(`
-            INSERT INTO items_compra (compra_id, producto_id, cantidad_ordenada, cantidad_recibida, costo_unitario, subtotal)
-            VALUES (@purchaseId, @productId, @quantityOrdered, @quantityReceived, @unitCost, @subtotal)
-          `);
+    for (const item of items) {
+      const prod = mockTables.productos.find(p => p.id === item.productId);
+      if (!prod) {
+        return res.status(400).json({ error: `Producto no encontrado: ${item.productId}` });
       }
-
-      await transaction.commit();
-
-      // Registrar auditoría
-      await pool.request()
-        .input('usuarioId', buyerId)
-        .input('accion', 'CREATE_PURCHASE')
-        .input('modulo', 'purchases')
-        .input('tablaAfectada', 'compras')
-        .input('registroId', purchaseId.toString())
-        .input('datosNuevos', JSON.stringify({ purchaseCode, supplierId, totalAmount }))
-        .query(`
-          INSERT INTO registros_auditoria_sistema (usuario_id, accion, modulo, tabla_afectada, registro_id, datos_nuevos)
-          VALUES (@usuarioId, @accion, @modulo, @tablaAfectada, @registroId, @datosNuevos)
-        `);
-
-      res.status(201).json({ success: true, purchaseId, purchaseCode });
-    } catch (error) {
-      await transaction.rollback();
-      throw error;
+      const qty = parseInt(item.quantity, 10);
+      const price = parseFloat(item.unitPrice !== undefined ? item.unitPrice : prod.costo);
+      if (!Number.isInteger(qty) || qty <= 0) {
+        return res.status(400).json({ error: `Cantidad inválida para producto ${prod.nombre}` });
+      }
+      const subtotal = parseFloat((qty * price).toFixed(2));
+      calculatedTotal += subtotal;
+      sanitizedItems.push({
+        productId: prod.id,
+        quantity: qty,
+        unitPrice: price,
+        subtotal
+      });
     }
+
+    calculatedTotal = parseFloat(calculatedTotal.toFixed(2));
+
+    const count = mockTables.compras.length + 1;
+    const purchaseCode = `OC-2026-${String(count).padStart(8, '0')}`;
+
+    const purchaseResult = await pool.request()
+      .input('purchaseCode', purchaseCode)
+      .input('supplierId', supplierId)
+      .input('buyerId', buyerId)
+      .input('invoiceNumber', invoiceNumber || null)
+      .input('invoiceDate', invoiceDate || null)
+      .input('totalAmount', calculatedTotal)
+      .input('notes', notes || null)
+      .query(`
+        INSERT INTO compras (codigo_compra, proveedor_id, comprador_id, numero_factura, fecha_factura, monto_total, notas, estado)
+        OUTPUT INSERTED.id
+        VALUES (@purchaseCode, @supplierId, @buyerId, @invoiceNumber, @invoiceDate, @totalAmount, @notes, 'REGISTRADA')
+      `);
+
+    const purchaseId = purchaseResult.recordset[0].id;
+
+    // Insertar ítems
+    for (const item of sanitizedItems) {
+      await pool.request()
+        .input('purchaseId', purchaseId)
+        .input('productId', item.productId)
+        .input('quantity', item.quantity)
+        .input('unitPrice', item.unitPrice)
+        .input('subtotal', item.subtotal)
+        .query(`
+          INSERT INTO items_compra (compra_id, producto_id, cantidad, cantidad_recibida, precio_unitario, subtotal)
+          VALUES (@purchaseId, @productId, @quantity, 0, @unitPrice, @subtotal)
+        `);
+    }
+
+    // Auditoría
+    await pool.request()
+      .input('usuarioId', buyerId)
+      .input('accion', 'CREATE_PURCHASE')
+      .input('modulo', 'purchases')
+      .input('tablaAfectada', 'compras')
+      .input('registroId', purchaseId)
+      .input('datosNuevos', JSON.stringify({ purchaseCode, calculatedTotal }))
+      .query(`
+        INSERT INTO registros_auditoria_sistema (usuario_id, accion, modulo, tabla_afectada, registro_id, datos_nuevos)
+        VALUES (@usuarioId, @accion, @modulo, @tablaAfectada, @registroId, @datosNuevos)
+      `);
+
+    res.status(201).json({
+      success: true,
+      purchaseId,
+      purchaseCode,
+      totalAmount: calculatedTotal,
+      message: `Orden de compra ${purchaseCode} registrada con éxito`
+    });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -96,94 +134,182 @@ async function createPurchase(req, res) {
 
 async function receivePurchase(req, res) {
   try {
-    const { purchaseId } = req.params;
+    const purchaseId = req.params.id || req.params.purchaseId;
+    const { receivedItems } = req.body;
     const pool = await getPool();
 
-    const purchase = await pool.request()
-      .input('purchaseId', purchaseId)
-      .query('SELECT * FROM compras WHERE id = @purchaseId');
-
-    if (purchase.recordset.length === 0) {
-      return res.status(404).json({ error: 'Compra no encontrada' });
+    const purchase = mockTables.compras.find(c => c.id === purchaseId);
+    if (!purchase) {
+      return res.status(404).json({ error: 'Orden de compra no encontrada' });
     }
 
-    const items = await pool.request()
-      .input('purchaseId', purchaseId)
-      .query('SELECT * FROM items_compra WHERE compra_id = @purchaseId');
+    if (purchase.estado === 'RECIBIDA') {
+      return res.status(400).json({ error: 'Esta orden de compra ya fue recibida anteriormente y su stock fue ingresado' });
+    }
 
-    const transaction = new (require('mssql')).Transaction(pool);
-    await transaction.begin();
+    const items = mockTables.items_compra.filter(it => it.compra_id === purchaseId);
+    if (items.length === 0) {
+      return res.status(400).json({ error: 'La orden de compra no contiene ítems' });
+    }
 
-    try {
-      // Marcar compra como recibida
-      await transaction.request()
-        .input('purchaseId', purchaseId)
-        .query(`UPDATE compras SET estado = 'RECIBIDA', fecha_actualizacion = SYSDATETIME() WHERE id = @purchaseId`);
+    const affectedProductIds = [];
 
-      // Crear lotes para cada ítem recibido
-      for (const item of items.recordset) {
-        const productResult = await transaction.request()
-          .input('productId', item.producto_id)
-          .query('SELECT nombre FROM productos WHERE id = @productId');
+    // Procesar recepción de ítems
+    for (const item of items) {
+      const prod = mockTables.productos.find(p => p.id === item.producto_id);
+      if (!prod) continue;
+      affectedProductIds.push(prod.id);
 
-        const productName = productResult.recordset[0]?.nombre || 'Producto';
+      // Si el cliente envió detalles específicos por ítem (código de lote y fecha de vencimiento reales)
+      const inputDetail = Array.isArray(receivedItems)
+        ? receivedItems.find(r => r.productId === item.producto_id || r.itemId === item.id)
+        : null;
 
-        // Generar código de lote
-        const batchCode = `LOT-REC-${Date.now()}`;
+      const batchCode = inputDetail?.codigoLote || `LOTE-${prod.codigo_barras ? prod.codigo_barras.slice(-4) : 'REC'}-${new Date().toISOString().slice(2, 7).replace('-', '')}`;
+      const expDate = inputDetail?.fechaVencimiento || new Date(Date.now() + 365 * 86400000).toISOString().split('T')[0];
+      const qtyReceived = inputDetail?.cantidadRecibida ? parseInt(inputDetail.cantidadRecibida, 10) : item.cantidad;
 
-        // Fecha de vencimiento: 1 año desde hoy por defecto
-        const expirationDate = new Date();
-        expirationDate.setFullYear(expirationDate.getFullYear() + 1);
-
-        await transaction.request()
-          .input('productId', item.producto_id)
-          .input('batchCode', batchCode)
-          .input('expirationDate', expirationDate)
-          .input('stockActual', item.cantidad_recibida || item.cantidad_ordenada)
-          .input('stockInitial', item.cantidad_ordenada)
-          .input('supplierId', purchase.recordset[0].proveedor_id)
-          .query(`
-            INSERT INTO lotes (producto_id, codigo_lote, fecha_vencimiento, stock_actual, stock_inicial, proveedor_id, estado)
-            VALUES (@productId, @batchCode, @expirationDate, @stockActual, @stockInitial, @supplierId, 'VIGENTE')
-          `);
-
-        // Registrar movimiento de stock
-        await transaction.request()
-          .input('productoId', item.producto_id)
-          .input('usuarioId', req.user.id)
-          .input('cantidad', item.cantidad_recibida || item.cantidad_ordenada)
-          .input('stockAnterior', 0)
-          .input('stockNuevo', item.cantidad_recibida || item.cantidad_ordenada)
-          .input('motivo', 'Recepción de compra ' + purchase.recordset[0].codigo_compra)
-          .query(`
-            INSERT INTO movimientos_stock (producto_id, usuario_id, tipo_movimiento, cantidad, stock_anterior, stock_nuevo, motivo, referencia_id)
-            VALUES (@productoId, @usuarioId, 'ENTRADA_COMPRA', @cantidad, @stockAnterior, @stockNuevo, @motivo, @purchaseId)
-          `);
+      // Buscar si ya existe lote con ese código para ese producto o crear nuevo
+      let lote = mockTables.lotes.find(l => l.producto_id === prod.id && l.codigo_lote === batchCode);
+      if (lote) {
+        lote.stock_actual += qtyReceived;
+        lote.estado = 'VIGENTE';
+        lote.fecha_actualizacion = new Date().toISOString();
+      } else {
+        lote = {
+          id: uuidv4(),
+          producto_id: prod.id,
+          codigo_lote: batchCode,
+          fecha_vencimiento: expDate,
+          stock_actual: qtyReceived,
+          stock_inicial: qtyReceived,
+          proveedor_id: purchase.proveedor_id,
+          estado: 'VIGENTE'
+        };
+        mockTables.lotes.push(lote);
       }
 
-      await transaction.commit();
+      item.cantidad_recibida = (item.cantidad_recibida || 0) + qtyReceived;
 
-      // Registrar auditoría
-      await pool.request()
-        .input('usuarioId', req.user.id)
-        .input('accion', 'RECEIVE_PURCHASE')
-        .input('modulo', 'purchases')
-        .input('tablaAfectada', 'compras')
-        .input('registroId', purchaseId)
-        .input('datosNuevos', JSON.stringify({ status: 'RECIBIDA' }))
-        .query(`
-          INSERT INTO registros_auditoria_sistema (usuario_id, accion, modulo, tabla_afectada, registro_id, datos_nuevos)
-          VALUES (@usuarioId, @accion, @modulo, @tablaAfectada, @registroId, @datosNuevos)
-        `);
-
-      res.json({ success: true, message: 'Compra recibida y lotes creados' });
-    } catch (error) {
-      await transaction.rollback();
-      throw error;
+      // Registrar kárdex de ingreso
+      const mov = {
+        id: uuidv4(),
+        producto_id: prod.id,
+        producto_nombre: prod.nombre,
+        codigo_barras: prod.codigo_barras,
+        lote_id: lote.id,
+        codigo_lote: batchCode,
+        usuario_id: req.user.id,
+        usuario_nombre: req.user.name,
+        tipo_movimiento: 'ENTRADA_COMPRA',
+        cantidad: qtyReceived,
+        stock_anterior: lote.stock_actual - qtyReceived,
+        stock_nuevo: lote.stock_actual,
+        motivo: `Recepción de orden ${purchase.codigo_compra}`,
+        referencia_id: purchaseId,
+        fecha: new Date().toISOString()
+      };
+      mockTables.movimientos_stock.push(mov);
     }
+
+    purchase.estado = 'RECIBIDA';
+    purchase.fecha_actualizacion = new Date().toISOString();
+
+    // Auto-evaluar alertas (resuelve alertas de stock bajo)
+    evaluateAlerts(affectedProductIds);
+
+    // Auditoría
+    await pool.request()
+      .input('usuarioId', req.user.id)
+      .input('accion', 'RECEIVE_PURCHASE')
+      .input('modulo', 'purchases')
+      .input('tablaAfectada', 'compras')
+      .input('registroId', purchaseId)
+      .input('datosNuevos', JSON.stringify({ status: 'RECIBIDA', purchaseCode: purchase.codigo_compra }))
+      .query(`
+        INSERT INTO registros_auditoria_sistema (usuario_id, accion, modulo, tabla_afectada, registro_id, datos_nuevos)
+        VALUES (@usuarioId, @accion, @modulo, @tablaAfectada, @registroId, @datosNuevos)
+      `);
+
+    res.json({
+      success: true,
+      message: `Orden ${purchase.codigo_compra} recibida correctamente. Stock ingresado al almacén y alertas actualizadas.`
+    });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
 }
 
-module.exports = { listPurchases, createPurchase, receivePurchase };
+async function getReplenishmentSuggestions(req, res) {
+  try {
+    const todayIso = new Date().toISOString().split('T')[0];
+    const suggestions = [];
+
+    for (const p of mockTables.productos) {
+      if (p.esta_activo !== 1) continue;
+
+      const totalStock = mockTables.lotes
+        .filter(l => l.producto_id === p.id && l.estado === 'VIGENTE' && l.fecha_vencimiento >= todayIso)
+        .reduce((sum, l) => sum + (parseInt(l.stock_actual, 10) || 0), 0);
+
+      // Si el stock actual está en o por debajo del mínimo configurado
+      if (totalStock <= p.stock_minimo) {
+        const cat = mockTables.categorias.find(c => c.id === p.categoria_id);
+        const prov = mockTables.proveedores[0]; // Proveedor preferente
+        const maxStock = p.stock_maximo || p.stock_minimo * 2;
+        const suggestedQty = Math.max(10, maxStock - totalStock);
+
+        suggestions.push({
+          productoId: p.id,
+          nombre: p.nombre,
+          codigoBarras: p.codigo_barras,
+          categoria: cat ? cat.nombre : 'General',
+          stockActual: totalStock,
+          stockMinimo: p.stock_minimo,
+          stockMaximo: maxStock,
+          cantidadSugerida: suggestedQty,
+          proveedorId: prov ? prov.id : null,
+          proveedorNombre: prov ? prov.razon_social : 'Droguería Distribuidora Nova Farma S.A.C.',
+          proveedorRuc: prov ? prov.ruc : '20100123456'
+        });
+      }
+    }
+
+    res.json({ suggestions });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+}
+
+async function generatePurchaseOrders(req, res) {
+  try {
+    const { supplierId, productOrders } = req.body;
+    if (!supplierId || !Array.isArray(productOrders) || productOrders.length === 0) {
+      return res.status(400).json({ error: 'Proveedor y lista de productos requeridos' });
+    }
+
+    const items = productOrders.map(po => ({
+      productId: po.productId,
+      quantity: po.quantity
+    }));
+
+    req.body = {
+      supplierId,
+      items,
+      notes: 'Generado automáticamente desde sugerencias de reposición'
+    };
+
+    return createPurchase(req, res);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+}
+
+module.exports = {
+  listPurchases,
+  getPurchase,
+  createPurchase,
+  receivePurchase,
+  getReplenishmentSuggestions,
+  generatePurchaseOrders
+};

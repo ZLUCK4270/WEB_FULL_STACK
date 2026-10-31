@@ -1,4 +1,4 @@
-const { processFEFOTransaction } = require('../services/fefoService');
+const { processFEFOTransaction, voidSaleTransaction } = require('../services/fefoService');
 const { getPool } = require('../config/db');
 
 const DEFAULT_LIMIT = 50;
@@ -24,7 +24,12 @@ async function createSale(req, res) {
       }
     }
 
-    const result = await processFEFOTransaction(items, cashierId, { customerId: customerId || null });
+    const result = await processFEFOTransaction(items, cashierId, {
+      customerId: customerId || null,
+      paymentMethod,
+      amountPaid,
+      receiptType
+    });
 
     // Registrar auditoría
     const pool = await getPool();
@@ -34,13 +39,52 @@ async function createSale(req, res) {
       .input('modulo', 'pos_sales')
       .input('tablaAfectada', 'ventas')
       .input('registroId', result.sale.id.toString())
-      .input('datosNuevos', JSON.stringify({ saleId: result.sale.id, codigo: result.sale.saleCode, total: result.sale.totalAmount, cliente: customerId || null }))
+      .input('datosNuevos', JSON.stringify({
+        saleId: result.sale.id,
+        codigo: result.sale.saleCode,
+        total: result.sale.totalAmount,
+        cliente: customerId || null,
+        metodoPago: paymentMethod
+      }))
       .query(`
         INSERT INTO registros_auditoria_sistema (usuario_id, accion, modulo, tabla_afectada, registro_id, datos_nuevos)
         VALUES (@usuarioId, @accion, @modulo, @tablaAfectada, @registroId, @datosNuevos)
       `);
 
     res.status(201).json({ success: true, sale: result.sale });
+  } catch (error) {
+    console.error(error);
+    res.status(400).json({ success: false, error: error.message });
+  }
+}
+
+async function voidSale(req, res) {
+  try {
+    const { id } = req.params;
+    const { motivo } = req.body;
+    const userId = req.user.id;
+
+    if (!motivo || String(motivo).trim().length < 5) {
+      return res.status(400).json({ error: 'Debe ingresar un motivo válido de anulación (mínimo 5 caracteres)' });
+    }
+
+    const result = await voidSaleTransaction(id, userId, String(motivo).trim());
+
+    // Registrar auditoría
+    const pool = await getPool();
+    await pool.request()
+      .input('usuarioId', userId)
+      .input('accion', 'VOID_SALE')
+      .input('modulo', 'pos_sales')
+      .input('tablaAfectada', 'ventas')
+      .input('registroId', id)
+      .input('datosNuevos', JSON.stringify({ saleId: id, motivo }))
+      .query(`
+        INSERT INTO registros_auditoria_sistema (usuario_id, accion, modulo, tabla_afectada, registro_id, datos_nuevos)
+        VALUES (@usuarioId, @accion, @modulo, @tablaAfectada, @registroId, @datosNuevos)
+      `);
+
+    res.json({ success: true, message: result.message });
   } catch (error) {
     console.error(error);
     res.status(400).json({ success: false, error: error.message });
@@ -63,36 +107,31 @@ async function listSales(req, res) {
     if (customer) request.input('customer', customer);
     if (search) request.input('search', `%${search}%`);
 
-    const whereClauses = [];
-    if (from) whereClauses.push('CAST(v.fecha_creacion AS DATE) >= @from');
-    if (to) whereClauses.push('CAST(v.fecha_creacion AS DATE) <= @to');
-    if (customer) whereClauses.push('v.cliente_id = @customer');
-    if (search) whereClauses.push("(v.codigo_venta LIKE @search)");
-
-    const whereSql = whereClauses.length ? `WHERE ${whereClauses.join(' AND ')}` : '';
-
-    const countResult = await request.query(`
-      SELECT COUNT(*) AS total FROM ventas v ${whereSql}
-    `);
-    const total = countResult.recordset[0].total;
-
-    request.input('limit', limitNum);
-    request.input('offset', offset);
-
     const result = await request.query(`
-      SELECT v.id, v.codigo_venta, v.fecha_creacion, v.monto_total, v.metodo_pago, v.estado,
+      SELECT v.id, v.codigo_venta, v.fecha_creacion, v.subtotal, v.monto_igv, v.monto_total,
+             v.metodo_pago, v.tipo_comprobante, v.estado, v.motivo_anulacion, v.fecha_anulacion,
              u.nombre + ' ' + u.apellido AS cajero,
              c.nombre_completo AS cliente,
              c.numero_documento AS cliente_doc
       FROM ventas v
       LEFT JOIN perfiles_usuario u ON v.cajero_id = u.id
       LEFT JOIN clientes c ON v.cliente_id = c.id
-      ${whereSql}
       ORDER BY v.fecha_creacion DESC
-      OFFSET @offset ROWS FETCH NEXT @limit ROWS ONLY
     `);
 
-    res.json({ sales: result.recordset, page: pageNum, limit: limitNum, total });
+    let sales = result.recordset;
+    if (search) {
+      const q = String(search).replace(/%/g, '').toLowerCase();
+      sales = sales.filter(s =>
+        s.codigo_venta.toLowerCase().includes(q) ||
+        (s.cliente && s.cliente.toLowerCase().includes(q))
+      );
+    }
+
+    const total = sales.length;
+    const paginated = sales.slice(offset, offset + limitNum);
+
+    res.json({ sales: paginated, page: pageNum, limit: limitNum, total });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -106,7 +145,8 @@ async function getSale(req, res) {
     const saleResult = await pool.request()
       .input('id', id)
       .query(`
-        SELECT v.id, v.codigo_venta, v.fecha_creacion, v.monto_total, v.metodo_pago, v.estado,
+        SELECT v.id, v.codigo_venta, v.fecha_creacion, v.subtotal, v.monto_igv, v.monto_total,
+               v.metodo_pago, v.tipo_comprobante, v.estado, v.motivo_anulacion, v.fecha_anulacion,
                u.nombre + ' ' + u.apellido AS cajero,
                c.nombre_completo AS cliente,
                c.numero_documento AS cliente_doc
@@ -130,34 +170,11 @@ async function getSale(req, res) {
         WHERE iv.venta_id = @id
       `);
 
-    // Lotes despachados por ítem
-    const enrichedItems = [];
-    for (const it of itemsResult.recordset) {
-      const lotesResult = await pool.request()
-        .input('itemId', it.id)
-        .query(`
-          SELECT ivl.lote_id, l.codigo_lote AS batchCode, l.fecha_vencimiento AS expirationDate, ivl.cantidad
-          FROM items_venta_lotes ivl
-          JOIN lotes l ON ivl.lote_id = l.id
-          WHERE ivl.item_venta_id = @itemId
-        `);
-      enrichedItems.push({
-        id: it.id,
-        productId: it.producto_id,
-        productName: it.productName,
-        codigo: it.codigo,
-        unitPrice: parseFloat(it.unitPrice),
-        quantity: it.cantidad,
-        subtotal: parseFloat(it.subtotal),
-        batches: lotesResult.recordset
-      });
-    }
-
     res.json({
       sale: {
         ...saleResult.recordset[0],
         monto_total: parseFloat(saleResult.recordset[0].monto_total),
-        items: enrichedItems
+        items: itemsResult.recordset
       }
     });
   } catch (error) {
@@ -165,4 +182,4 @@ async function getSale(req, res) {
   }
 }
 
-module.exports = { createSale, listSales, getSale };
+module.exports = { createSale, voidSale, listSales, getSale };

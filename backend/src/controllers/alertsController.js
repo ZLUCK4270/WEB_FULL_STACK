@@ -1,5 +1,4 @@
-const { getPool } = require('../config/db');
-const sql = require('mssql');
+const { getPool, sql } = require('../config/db');
 
 /**
  * Genera alertas de reposición y vencimiento basadas en el estado real del inventario.

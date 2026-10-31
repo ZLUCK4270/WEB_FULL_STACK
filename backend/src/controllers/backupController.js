@@ -1,4 +1,4 @@
-const { getPool } = require('../config/db');
+const { getPool, sql } = require('../config/db');
 const { v4: uuidv4 } = require('uuid');
 
 const ALLOWED_TABLES = [
@@ -117,7 +117,7 @@ async function restoreBackup(req, res) {
     const data = typeof payloadJson === 'string' ? JSON.parse(payloadJson) : payloadJson;
 
     const pool = await getPool();
-    const transaction = new (require('mssql')).Transaction(pool);
+    const transaction = new sql.Transaction(pool);
     await transaction.begin();
 
     try {
