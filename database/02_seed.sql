@@ -12,19 +12,20 @@ INSERT INTO modulos_sistema (id, nombre, descripcion, icono, orden, esta_activo)
 ('alerts', 'Centro de Alertas', 'Stock bajo y vencimientos', 'BellRing', 6, 1),
 ('customers', 'Clientes', 'Registro y atención al cliente', 'Users', 7, 1),
 ('staff', 'Usuarios & RBAC', 'Matriz de permisos', 'ShieldCheck', 8, 1),
-('audit', 'Auditoría Forense', 'Bitácora de acciones', 'FileText', 9, 1);
+('audit', 'Auditoría Forense', 'Bitácora de acciones', 'FileText', 9, 1),
+('backups', 'Respaldos', 'Copias de seguridad del sistema', 'Database', 10, 1);
 
 -- Usuario Administrador Raíz (inmutable)
 INSERT INTO perfiles_usuario (id, dni, nombre, apellido, correo, telefono, cargo, es_administrador_raiz, esta_activo, debe_cambiar_clave) VALUES
-('a0000000-0000-0000-0000-000000000001', '10203040', 'Carlos Alberto', 'Mendoza Vera', 'admin@novasalud.pe', '987654321', 'Administrador Propietario', 1, 1, 0);
+('a0000000-0000-0000-0000-000000000001', '10203040', 'Carlos Alberto', 'Mendoza Vera', 'admin@novasalud.pe', '987654321', 'Q.F. Regente / Administrador General', 1, 1, 0);
 
 -- Usuario Cajero
 INSERT INTO perfiles_usuario (id, dni, nombre, apellido, correo, telefono, cargo, es_administrador_raiz, esta_activo, debe_cambiar_clave) VALUES
-('b0000000-0000-0000-0000-000000000002', '71829304', 'Juan Manuel', 'Pérez García', 'cajero@novasalud.pe', '912345678', 'Cajero / Atención Mostrador', 0, 1, 1);
+('b0000000-0000-0000-0000-000000000002', '71829304', 'Juan Manuel', 'Pérez García', 'cajero@novasalud.pe', '912345678', 'Técnico en Farmacia / Cajero POS', 0, 1, 0);
 
 -- Usuario Almacén
 INSERT INTO perfiles_usuario (id, dni, nombre, apellido, correo, telefono, cargo, es_administrador_raiz, esta_activo, debe_cambiar_clave) VALUES
-('c0000000-0000-0000-0000-000000000003', '76543210', 'Luis', 'Torres Valdivia', 'almacen@novasalud.pe', '99887766', 'Almacén y Logística', 0, 1, 1);
+('c0000000-0000-0000-0000-000000000003', '76543210', 'Luis Enrique', 'Torres Valdivia', 'almacen@novasalud.pe', '998877665', 'Jefe de Almacén y Control BPA', 0, 1, 0);
 
 -- Categorías
 DECLARE @catAntibioticos UNIQUEIDENTIFIER = NEWID();
@@ -56,9 +57,9 @@ DECLARE @prodIbuprofeno UNIQUEIDENTIFIER = NEWID();
 DECLARE @prodOmeprazol UNIQUEIDENTIFIER = NEWID();
 
 INSERT INTO productos (id, codigo_barras, nombre, nombre_generico, nombre_comercial, concentracion, presentacion, registro_sanitario, categoria_id, laboratorio_id, precio_venta, costo, stock_minimo, stock_maximo, requiere_receta, es_controlado, esta_activo) VALUES
-(@prodAmoxicilina, '7750123456789', 'Amoxicilina 500mg Cápsulas', 'Amoxicilina', 'Amoxil', '500 mg', 'CAJA', 'EE-04521-DIGEMID', @catAntibioticos, @labFarmaindustria, 0.80, 0.35, 30, 150, 1, 0, 1),
-(@prodIbuprofeno, '7750987654321', 'Ibuprofeno 400mg Tabletas', 'Ibuprofeno', 'Doloral', '400 mg', 'BLISTER', 'EE-01298-DIGEMID', @catAnalgesicos, @labBago, 0.50, 0.20, 50, 200, 0, 0, 1),
-(@prodOmeprazol, '7750112233445', 'Omeprazol 20mg Cápsulas', 'Omeprazol', NULL, '20 mg', 'CAJA', NULL, @catGastro, @labFarmaindustria, 1.10, 0.48, 70, 200, 0, 0, 1);
+(@prodAmoxicilina, '7750123456789', 'Amoxicilina 500mg Cápsulas', 'Amoxicilina', 'Amoxil', '500 mg', 'CAJA', 'EE-04521-DIGEMID', @catAntibioticos, @labFarmaindustria, 3.50, 1.40, 30, 180, 1, 0, 1),
+(@prodIbuprofeno, '7750987654321', 'Ibuprofeno 400mg Tabletas', 'Ibuprofeno', 'Doloral', '400 mg', 'BLISTER', 'EE-01298-DIGEMID', @catAnalgesicos, @labBago, 2.50, 0.90, 40, 200, 0, 0, 1),
+(@prodOmeprazol, '7750112233445', 'Omeprazol 20mg Cápsulas', 'Omeprazol', NULL, '20 mg', 'CAJA', NULL, @catGastro, @labFarmaindustria, 3.00, 1.10, 35, 160, 0, 0, 1);
 
 -- Lotes FEFO
 DECLARE @exp30Days DATE = DATEADD(DAY, 30, CAST(GETDATE() AS DATE));
@@ -77,16 +78,20 @@ INSERT INTO lotes (producto_id, codigo_lote, fecha_vencimiento, stock_actual, st
 INSERT INTO clientes (id, tipo_documento, numero_documento, nombre_completo, telefono, correo, direccion) VALUES
 (NEWID(), 'DNI', '45892134', 'Rosa María Chávez Ortiz', '984512367', 'rosa.chavez@gmail.com', 'Jr. Los Álamos 340, Breña');
 
--- Permisos para el Cajero (Solo POS, Clientes e Inventario lectura)
+-- Permisos para el Cajero (POS, Ventas, Caja, Clientes, Alertas e Inventario lectura)
 INSERT INTO permisos_usuario (usuario_id, modulo_id, puede_ver, puede_crear, puede_editar, puede_eliminar, otorgado_por_id) VALUES
-('b0000000-0000-0000-0000-000000000002', 'pos_sales', 1, 1, 0, 0, 'a0000000-0000-0000-0000-000000000001'),
-('b0000000-0000-0000-0000-000000000002', 'customers', 1, 1, 0, 0, 'a0000000-0000-0000-0000-000000000001'),
-('b0000000-0000-0000-0000-000000000002', 'inventory', 1, 0, 0, 0, 'a0000000-0000-0000-0000-000000000001');
+('b0000000-0000-0000-0000-000000000002', 'dashboard', 1, 0, 0, 0, 'a0000000-0000-0000-0000-000000000001'),
+('b0000000-0000-0000-0000-000000000002', 'pos_sales', 1, 1, 1, 1, 'a0000000-0000-0000-0000-000000000001'),
+('b0000000-0000-0000-0000-000000000002', 'cash', 1, 1, 1, 0, 'a0000000-0000-0000-0000-000000000001'),
+('b0000000-0000-0000-0000-000000000002', 'customers', 1, 1, 1, 0, 'a0000000-0000-0000-0000-000000000001'),
+('b0000000-0000-0000-0000-000000000002', 'inventory', 1, 0, 0, 0, 'a0000000-0000-0000-0000-000000000001'),
+('b0000000-0000-0000-0000-000000000002', 'alerts', 1, 1, 1, 0, 'a0000000-0000-0000-0000-000000000001');
 
 -- Permisos para Almacén
 INSERT INTO permisos_usuario (usuario_id, modulo_id, puede_ver, puede_crear, puede_editar, puede_eliminar, otorgado_por_id) VALUES
-('c0000000-0000-0000-0000-000000000003', 'inventory', 1, 1, 1, 0, 'a0000000-0000-0000-0000-000000000001'),
-('c0000000-0000-0000-0000-000000000003', 'purchases', 1, 1, 0, 0, 'a0000000-0000-0000-0000-000000000001'),
-('c0000000-0000-0000-0000-000000000003', 'alerts', 1, 0, 0, 0, 'a0000000-0000-0000-0000-000000000001');
+('c0000000-0000-0000-0000-000000000003', 'dashboard', 1, 0, 0, 0, 'a0000000-0000-0000-0000-000000000001'),
+('c0000000-0000-0000-0000-000000000003', 'inventory', 1, 1, 1, 1, 'a0000000-0000-0000-0000-000000000001'),
+('c0000000-0000-0000-0000-000000000003', 'purchases', 1, 1, 1, 1, 'a0000000-0000-0000-0000-000000000001'),
+('c0000000-0000-0000-0000-000000000003', 'alerts', 1, 1, 1, 1, 'a0000000-0000-0000-0000-000000000001');
 
 PRINT 'Datos semilla insertados correctamente.';

@@ -1263,8 +1263,13 @@ class MockRequest {
       const lote = tables.lotes.find(l => l.id === (inputs.loteId || inputs.id));
       if (lote) {
         if (inputs.cantidad !== undefined) {
-          lote.stock_actual = Math.max(0, lote.stock_actual - inputs.cantidad);
-          if (lote.stock_actual === 0) lote.estado = 'AGOTADO';
+          if (upper.includes('STOCK_ACTUAL + @CANTIDAD')) {
+            lote.stock_actual = lote.stock_actual + inputs.cantidad;
+            if (lote.estado === 'AGOTADO' && lote.stock_actual > 0) lote.estado = 'VIGENTE';
+          } else {
+            lote.stock_actual = Math.max(0, lote.stock_actual - inputs.cantidad);
+            if (lote.stock_actual === 0) lote.estado = 'AGOTADO';
+          }
         } else if (inputs.stockNuevo !== undefined) {
           lote.stock_actual = inputs.stockNuevo;
           if (lote.stock_actual === 0) lote.estado = 'AGOTADO';
@@ -1537,7 +1542,19 @@ class MockRequest {
       return { recordset: [{ id: newId }], rowsAffected: [1] };
     }
 
-    // 17. INSERT INTO items_venta
+    // 17. INSERT INTO items_venta_lotes (evaluar antes que items_venta por prefijo común)
+    if (upper.startsWith('INSERT INTO ITEMS_VENTA_LOTES')) {
+      const newItemLote = {
+        id: uuidv4(),
+        item_venta_id: inputs.itemVentaId,
+        lote_id: inputs.loteId,
+        cantidad: inputs.cantidad
+      };
+      tables.items_venta_lotes.push(newItemLote);
+      return { recordset: [], rowsAffected: [1] };
+    }
+
+    // 18. INSERT INTO items_venta
     if (upper.startsWith('INSERT INTO ITEMS_VENTA')) {
       const newId = uuidv4();
       const newItem = {
@@ -1552,18 +1569,6 @@ class MockRequest {
       tables.items_venta.push(newItem);
       evaluateAlerts([inputs.productId]);
       return { recordset: [{ id: newId }], rowsAffected: [1] };
-    }
-
-    // 18. INSERT INTO items_venta_lotes
-    if (upper.startsWith('INSERT INTO ITEMS_VENTA_LOTES')) {
-      const newItemLote = {
-        id: uuidv4(),
-        item_venta_id: inputs.itemVentaId,
-        lote_id: inputs.loteId,
-        cantidad: inputs.cantidad
-      };
-      tables.items_venta_lotes.push(newItemLote);
-      return { recordset: [], rowsAffected: [1] };
     }
 
     // 19. Dashboard stats for sales today

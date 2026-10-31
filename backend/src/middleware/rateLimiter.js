@@ -19,7 +19,7 @@ function cleanupOldWindows() {
   }
 }
 // Limpieza periódica para no crecer la memoria indefinidamente.
-setInterval(cleanupOldWindows, 60 * 60 * 1000);
+setInterval(cleanupOldWindows, 60 * 60 * 1000).unref();
 
 /**
  * Middleware de rate limiting para rutas de autenticación.

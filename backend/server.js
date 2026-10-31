@@ -16,8 +16,19 @@ const dashboardRoutes = require('./src/routes/dashboardRoutes');
 
 const apiRouter = express.Router();
 
-// CORS
-apiRouter.use(cors());
+// Cabeceras de seguridad HTTP (OWASP)
+apiRouter.use((req, res, next) => {
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'SAMEORIGIN');
+  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+  next();
+});
+
+// Configuración CORS basada en variables de entorno
+const corsOrigin = process.env.CORS_ORIGIN
+  ? process.env.CORS_ORIGIN.split(',').map((s) => s.trim())
+  : '*';
+apiRouter.use(cors({ origin: corsOrigin }));
 apiRouter.use(express.json({ limit: '10mb' }));
 
 // Rutas de la API
@@ -34,7 +45,11 @@ apiRouter.use('/dashboard', dashboardRoutes);
 
 // Ruta de salud
 apiRouter.get('/health', (req, res) => {
-  res.json({ status: 'ok', service: 'novasalud-backend', timestamp: new Date().toISOString() });
+  res.json({
+    status: 'ok',
+    service: 'novasalud-backend',
+    timestamp: new Date().toISOString()
+  });
 });
 
 // Manejo de rutas no encontradas dentro de /api
@@ -52,7 +67,7 @@ apiRouter.use((err, req, res, next) => {
 });
 
 const app = express();
-const PORT = process.env.PORT || 8081;
+const PORT = Number(process.env.PORT) || 8081;
 
 app.use('/api', apiRouter);
 

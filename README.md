@@ -1,120 +1,128 @@
-# Botica Nova Salud S.A.C. — Sistema Integral de Gestión Farmacéutica
+# 🏥 Botica Nova Salud — Sistema Web de Gestión Farmacéutica (ERP + POS + FEFO + RBAC)
 
-Sistema web **Full-Stack** diseñado para la administración integral de farmacias y boticas bajo normativas sanitarias peruanas (**DIGEMID**). Incorpora despacho automático por **FEFO** (_First Expired, First Out_), Punto de Venta (POS), control de Kárdex, arqueo de caja, gestión de compras, alertas inteligentes en tiempo real y auditoría forense con control de acceso basado en roles (**RBAC**).
-
----
-
-## 1. Arquitectura y Stack Tecnológico
-
-### Frontend (Cliente SPA)
-
-- **Framework:** React 19 + TypeScript + Vite 8
-- **Estilos y UI:** Tailwind CSS v4, Lucide React (iconografía), Motion (animaciones fluidas)
-- **Visualización y Reportes:**
-  - `Recharts`: Gráficos estadísticos en el Panel de Control (ventas, stock, rotación).
-  - `jsPDF` + `jspdf-autotable`: Emisión de comprobantes (Boletas/Facturas en PDF) y reportes de auditoría/inventario.
-  - `xlsx`: Exportación de reportes gerenciales, kárdex y cierres de caja a Microsoft Excel.
-- **Estado Global e Internacionalización:** Context API (`PharmacyContext` y `LanguageProvider`).
-
-### Backend (API RESTful)
-
-- **Entorno:** Node.js + Express.js
-- **Seguridad y Autenticación:**
-  - **JWT (`jsonwebtoken`):** Sesiones firmadas con expiración configurable (`24h`).
-  - **Encriptación (`bcryptjs`):** Hash seguro de contraseñas.
-  - **Matriz RBAC:** Middleware de permisos granulares por módulo (`puede_ver`, `puede_crear`, `puede_editar`, `puede_eliminar`).
-- **Servidor Unificado (`server.ts`):** Integra el router `/api` del backend con Vite en modo middleware para desarrollo y sirve los archivos estáticos compilados (`dist/`) en producción.
-
-### Base de Datos
-
-- **Motor Principal (Producción / Docker):** Microsoft SQL Server 2022 Express (`database/01_schema.sql`, `02_seed.sql`).
-- **Motor Adaptativo En Memoria (`backend/src/config/db.js`):** Adaptador SQL in-memory pre-poblado que permite ejecutar y demostrar el sistema instantáneamente sin requerir una instancia activa de SQL Server en entornos de desarrollo rápido o contenedores ligeros gratuitos.
+Plataforma Full Stack web diseñada para la gestión centralizada y automatizada de inventario por lotes (**FEFO — First-Expire, First-Out**), Punto de Venta (POS) ágil con buscador de sustitutos bioequivalentes (DCI), control de caja por turnos, compras/reposición automática, alertas en tiempo real y auditoría forense bajo estándares **DIGEMID / BPA / SUNAT**.
 
 ---
 
-## 2. Módulos Principales del Sistema
+## 🏗️ Arquitectura y Stack Tecnológico
 
-| Módulo                    | Identificador | Funcionalidades Clave                                                                                                                                                                      |
-| :------------------------ | :------------ | :----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Panel de Control**      | `dashboard`   | KPIs financieros, ventas del día, productos críticos, lotes por vencer y gráficos interactivos.                                                                                            |
-| **Punto de Venta (POS)**  | `pos`         | Despacho automático **FEFO** (prioriza lotes próximos a vencer y bloquea lotes vencidos), cálculo de IGV (18%), pagos mixtos (Efectivo, Yape/Plin, Tarjeta) y emisión de comprobantes PDF. |
-| **Historial de Ventas**   | `sales`       | Consulta de transacciones, reimpresión de tickets/boletas, anulación con retorno automático de stock al lote original y exportación a Excel/PDF.                                           |
-| **Inventario y Lotes**    | `inventory`   | Catálogo de medicamentos (registro sanitario DIGEMID, genérico/comercial, condición de receta), trazabilidad por lotes, fechas de vencimiento y Kárdex de movimientos.                     |
-| **Caja Registradora**     | `cash`        | Apertura de turno con fondo inicial, registro de ingresos/egresos extraordinarios, cálculo de efectivo esperado vs. contado y arqueo de cierre.                                            |
-| **Compras y Reposición**  | `purchases`   | Órdenes de compra a droguerías/laboratorios, recepción de mercadería con creación automática de lotes y sugerencias de reposición por stock mínimo.                                        |
-| **Centro de Alertas**     | `alerts`      | Motor automático que detecta `SIN_STOCK`, `STOCK_BAJO`, `VENCIMIENTO_CERCA` (≤ 30 días) y `VENCIDO`, con auto-resolución al reponer inventario.                                            |
-| **Clientes**              | `customers`   | Padrón de clientes por DNI/RUC, historial de compras y datos de contacto.                                                                                                                  |
-| **Auditoría y Seguridad** | `audit`       | Bitácora forense inmutable de acciones críticas, matriz de usuarios/roles (**RBAC**) y generación de respaldos JSON del estado del sistema.                                                |
+| Capa | Tecnologías | Propósito |
+| :--- | :--- | :--- |
+| **Frontend (SPA)** | React 19, TypeScript 7 (`strict`), Vite 8, Tailwind CSS v4, Lucide Icons, Axios | Interfaz clínica adaptativa (Modo Claro/Oscuro), panel lateral colapsable sin superposición, POS con atajos (`F2`, `F4`, `ESC`) |
+| **Backend (API REST)** | Node.js 22, Express 4, JWT (`jsonwebtoken`), `bcryptjs`, Rate Limiter en memoria | Autenticación segura, RBAC granular por módulo/acción, motor transaccional FEFO, cabeceras OWASP |
+| **Datos y Esquema SQL** | Microsoft SQL Server 2022 (`database/*.sql`) + Adaptador Transaccional (`backend/src/config/db.js`) | 18 tablas relacionales en español, semillas pre-cargadas con catálogo farmacéutico peruano real |
+| **DevOps & QA** | Docker Multi-Stage, Nginx Reverse Proxy, Docker Compose, GitHub Actions CI, `node:test` | Contenedores aislados (`3080:80` y `8081:8081`), pruebas de integración automatizadas |
 
 ---
 
-## 3. Estructura del Proyecto
+## 📂 Estructura del Proyecto
 
 ```text
 WEB_FULL_STACK/
-├── backend/                  # API REST Express + Controladores y Servicios
+├── .github/workflows/ci.yml   # Pipeline CI/CD (Install, DB Check, Typecheck, Tests, Build)
+├── backend/                   # Servidor API REST Express (CommonJS)
 │   ├── src/
-│   │   ├── config/db.js      # Adaptador SQL / In-Memory DB con motor de alertas
-│   │   ├── controllers/      # Lógica de negocio por módulo (ventas, FEFO, caja, etc.)
-│   │   ├── middlewares/      # Autenticación JWT, RBAC y auditoría
-│   │   ├── routes/           # Definición de endpoints REST (/api/*)
-│   │   └── services/         # Servicios transversales (alertas, respaldos)
-│   ├── Dockerfile            # Imagen Docker del backend (Node 18 Alpine)
-│   └── server.js             # Punto de entrada independiente del API (puerto 8081)
-├── database/                 # Scripts SQL para Microsoft SQL Server
-│   ├── 01_schema.sql         # Definición de tablas, claves foráneas e índices
-│   ├── 02_seed.sql           # Datos semilla (categorías, laboratorios, productos)
-│   └── 03_seed_auth.sql      # Usuarios iniciales y matriz de permisos RBAC
-├── src/                      # Código fuente del Frontend (React + TypeScript)
-│   ├── components/           # Vistas modulares (pos, inventory, sales, cash, etc.)
-│   ├── context/              # Estado global (PharmacyContext.tsx)
-│   ├── services/             # Cliente HTTP Axios (api.js, pharmacyApi.js)
-│   ├── types/                # Definiciones TypeScript (pharmacy.ts)
-│   └── App.tsx               # Shell principal, navegación por roles y layout
-├── server.ts                 # Servidor Full-Stack unificado (Express + Vite/Static)
-├── docker-compose.yml        # Orquestación multicontenedor (SQL Server + Backend + Frontend)
-└── package.json              # Dependencias y scripts del proyecto unificado
+│   │   ├── config/db.js       # Adaptador SQL transaccional + datos semilla realistas
+│   │   ├── controllers/       # Controladores (auth, sales, inventory, cash, purchases, alerts, audit, customers, backups, dashboard)
+│   │   ├── middleware/        # authMiddleware (JWT), rbacMiddleware, rateLimiter
+│   │   ├── routes/            # Enrutadores modulares bajo /api/*
+│   │   └── services/          # fefoService.js (despacho y anulación FEFO) y backupService.js
+│   ├── Dockerfile             # Imagen Node 22 Alpine para producción
+│   └── server.js              # Punto de entrada API (:8081)
+├── database/                  # Scripts T-SQL para Microsoft SQL Server
+│   ├── 01_schema.sql          # DDL completo de las 18 tablas e índices
+│   ├── 02_seed.sql            # Datos semilla iniciales y matriz RBAC
+│   ├── 03_migration.sql       # Migraciones de autenticación y campos extendidos
+│   └── 03_seed_auth.sql       # Hashes bcrypt de usuarios iniciales
+├── src/                       # Frontend React 19 + TypeScript + Tailwind v4
+│   ├── components/            # Vistas modulares (dashboard, pos, sales, inventory, cash, purchases, alerts, customers, audit, auth, layout)
+│   ├── context/               # PharmacyContext.tsx (estado global sincronizado)
+│   ├── i18n/                  # Contexto de idioma y diccionario ES/EN
+│   ├── services/              # Cliente Axios con interceptores JWT (api.js, pharmacyApi.js)
+│   └── types/                 # Contratos TypeScript (pharmacy.ts)
+├── tests/
+│   └── api.test.mjs           # Suite automatizada de pruebas QA (Salud, JWT, RBAC, FEFO, Alertas)
+├── Dockerfile                 # Build Multi-Stage Frontend (Node 22 -> Nginx Alpine)
+├── docker-compose.yml         # Orquestación completa (sqlserver + backend + frontend)
+├── nginx.conf                 # Servidor SPA y Reverse Proxy (/api -> backend:8081)
+└── server.ts                  # Servidor unificado (Vite middleware en dev / estáticos en prod)
 ```
 
 ---
 
-## 4. Credenciales de Acceso de Prueba (RBAC)
+## ⚙️ Variables de Entorno (`.env.example`)
 
-El sistema cuenta con tres perfiles preconfigurados para validar la segregación de funciones:
+Copie `.env.example` a `.env` en la raíz del proyecto:
 
-| Rol / Cargo                   | DNI (Usuario) | Contraseña    | Módulos Habilitados                                       |
-| :---------------------------- | :------------ | :------------ | :-------------------------------------------------------- |
-| **Administrador Propietario** | `10203040`    | `regente2026` | Acceso total (9 módulos, incluyendo Auditoría y RBAC)     |
-| **Cajero / Mostrador**        | `71829304`    | `caja2026`    | Dashboard, POS, Historial Ventas, Caja, Clientes, Alertas |
-| **Almacén y Logística**       | `76543210`    | `almacen2026` | Dashboard, Inventario y Lotes, Compras, Alertas           |
+| Variable | Entorno | Descripción | Valor por defecto / Ejemplo |
+| :--- | :--- | :--- | :--- |
+| `NODE_ENV` | Servidor | Modo de ejecución (`development` / `production`) | `development` |
+| `PORT` | Servidor | Puerto HTTP del servidor API o unificado | `8081` (API) / `3000` (`server.ts`) |
+| `CORS_ORIGIN` | Servidor | Orígenes permitidos separados por coma | `http://localhost:3080` |
+| `JWT_SECRET` | Servidor (Secreto) | Clave de firma de tokens JWT (**nunca exponer en cliente**) | `reemplazar_por_secreto_seguro` |
+| `JWT_EXPIRES_IN` | Servidor | Tiempo de expiración del token JWT | `24h` |
+| `DB_SERVER` | Servidor | Host de SQL Server | `localhost` o `sqlserver` |
+| `DB_PORT` | Servidor | Puerto de SQL Server | `1433` |
+| `DB_USER` | Servidor | Usuario de base de datos | `sa` |
+| `DB_PASSWORD` | Servidor (Secreto) | Contraseña de SQL Server | `NovaSalud2026!` |
+| `DB_DATABASE` | Servidor | Nombre de la base de datos | `NovaSalud` |
+| `DB_ENCRYPT` | Servidor | Cifrado TLS de conexión SQL | `false` |
+| `VITE_API_URL` | Cliente (Pública) | Ruta base de la API consumida por React | `/api` |
+| `DISABLE_HMR` | Desarrollo | Desactiva Hot Module Replacement en entornos cloud | `false` |
 
 ---
 
-## 5. Instalación y Ejecución Local
+## 📜 Scripts Disponibles (`package.json`)
 
-### Requisitos Previos
+| Script | Comando | Descripción |
+| :--- | :--- | :--- |
+| `npm run dev` | `tsx server.ts` | Inicia el servidor unificado en modo desarrollo (API + Vite HMR) |
+| `npm run build` | `vite build` | Compila el bundle optimizado de producción en `/dist` |
+| `npm start` | `tsx server.ts --production` | Inicia el servidor en modo producción sirviendo `/dist` y `/api` |
+| `npm run lint` | `tsc --noEmit` | Verificación estática de tipos con TypeScript (`strict: true`) |
+| `npm run typecheck` | `tsc --noEmit` | Alias de verificación estricta de tipos |
+| `npm test` | `node --test tests/api.test.mjs` | Ejecuta las pruebas de integración de API, JWT, RBAC y motor FEFO |
+| `npm run format` | `node -e ...` | Verifica formato y finales de línea UTF-8 LF |
+| `npm run db:generate` | `node -e ...` | Valida el esquema SQL (`database/01_schema.sql`) y el adaptador |
+| `npm run db:migrate` | `node -e ...` | Verifica sincronización de migraciones (`database/03_migration.sql`) |
+| `npm run db:seed` | `node -e ...` | Verifica los datos semilla cargados (productos, lotes FEFO, usuarios) |
 
-- **Node.js** v18 o superior (recomendado v20/v22)
-- **npm** v9+
+---
 
-### Pasos para Iniciar en Modo Desarrollo Unificado
+## 🔑 Credenciales de Prueba Pre-cargadas (RBAC)
 
-1. Instalar las dependencias en la raíz del proyecto:
-   ```bash
+| Rol | Usuario | DNI | Contraseña | Permisos Habilitados |
+| :--- | :--- | :--- | :--- | :--- |
+| **Q.F. Regente / Admin** | Carlos Alberto Mendoza Vera | `10203040` | `regente2026` | Acceso total a los 9 módulos + Respaldos y Auditoría |
+| **Cajero POS** | Juan Manuel Pérez García | `71829304` | `caja2026` | Punto de Venta, Historial Ventas, Caja y Turnos, Clientes |
+| **Jefe de Almacén** | Luis Enrique Torres Valdivia | `76543210` | `almacen2026` | Panel General, Inventario y Lotes FEFO, Compras, Alertas |
+
+---
+
+## 🚀 Instalación y Despliegue Paso a Paso
+
+### Opción A: Despliegue con Docker Compose (Recomendado para Producción / Evaluación)
+1. Construir y levantar los 3 contenedores (`sqlserver`, `backend`, `frontend`):
+   ```powershell
+   docker compose up -d --build
+   ```
+2. Abrir en el navegador: **`http://localhost:3080`**
+3. Verificar estado de salud de la API: **`http://localhost:8081/api/health`**
+
+### Opción B: Ejecución Local desde Cero (Node.js 22+)
+1. Instalar dependencias:
+   ```powershell
    npm install
+   npm --prefix backend install
    ```
-2. Iniciar el servidor unificado (Frontend + Backend en el mismo puerto):
-   ```bash
-   npm run dev
+2. Verificar tipos, pruebas automatizadas y compilación de producción:
+   ```powershell
+   npm run lint
+   npm test
+   npm run build
    ```
-3. Abrir en el navegador:
-   ```text
-   http://localhost:3000
+3. Arrancar en modo producción:
+   ```powershell
+   npm start
    ```
-
-### Scripts Disponibles en `package.json`
-
-- `npm run dev`: Levanta el servidor Express + Vite con Hot Module Replacement (HMR) en `http://localhost:3000`.
-- `npm run build`: Compila el frontend de React optimizado para producción en la carpeta `dist/`.
-- `npm start`: Ejecuta el servidor en modo producción (`NODE_ENV=production tsx server.ts`).
-- `npm run lint`: Verifica el tipado estático con TypeScript (`tsc --noEmit`).
+   El sistema estará disponible en **`http://localhost:3000`**.

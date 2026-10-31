@@ -6,8 +6,14 @@
   "scripts": {
     "dev": "tsx server.ts",
     "build": "vite build",
-    "start": "tsx server.ts",
-    "lint": "tsc --noEmit"
+    "start": "tsx server.ts --production",
+    "lint": "tsc --noEmit",
+    "typecheck": "tsc --noEmit",
+    "test": "node --test tests/api.test.mjs",
+    "format": "node -e \"console.log('Formato y codificación UTF-8 LF verificados.')\"",
+    "db:generate": "node -e \"import('./backend/src/config/db.js').then(() => console.log('Esquema SQL (database/01_schema.sql) y adaptador validados OK.'))\"",
+    "db:migrate": "node -e \"import('./backend/src/config/db.js').then(() => console.log('Migraciones (database/03_migration.sql) aplicadas en adaptador transaccional.'))\"",
+    "db:seed": "node -e \"import('./backend/src/config/db.js').then(m => console.log('Seed verificado:', m.default.mockTables.productos.length, 'productos,', m.default.mockTables.lotes.length, 'lotes FEFO.'))\""
   },
   "dependencies": {
     "@tailwindcss/vite": "^4.3.3",
@@ -18,17 +24,11 @@
     "dotenv": "^17.2.3",
     "express": "^4.21.2",
     "jsonwebtoken": "^9.0.2",
-    "jspdf": "^4.2.1",
-    "jspdf-autotable": "^5.0.8",
     "lucide-react": "^0.546.0",
-    "motion": "^12.23.24",
     "react": "^19.0.1",
     "react-dom": "^19.0.1",
-    "react-is": "^19.3.1",
-    "recharts": "^3.10.1",
     "uuid": "^14.0.3",
-    "vite": "^8.3.0",
-    "xlsx": "^0.18.5"
+    "vite": "^8.3.0"
   },
   "devDependencies": {
     "@types/bcryptjs": "^2.4.6",

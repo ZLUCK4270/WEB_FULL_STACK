@@ -307,12 +307,20 @@ async function voidSaleTransaction(saleId, userId, reason) {
         `);
     }
 
-    // Actualizar estado de la venta a ANULADA
-    const nowIso = new Date().toISOString();
-    sale.estado = 'ANULADA';
-    sale.motivo_anulacion = reason;
-    sale.fecha_anulacion = nowIso;
-    sale.anulado_por_id = userId;
+    // Actualizar estado de la venta a ANULADA mediante sentencia SQL
+    await transaction.request()
+      .input('saleId', saleId)
+      .input('estado', 'ANULADA')
+      .input('reason', reason)
+      .input('userId', userId)
+      .query(`
+        UPDATE ventas
+        SET estado = @estado,
+            motivo_anulacion = @reason,
+            fecha_anulacion = SYSDATETIME(),
+            anulado_por_id = @userId
+        WHERE id = @saleId
+      `);
 
     await transaction.commit();
 

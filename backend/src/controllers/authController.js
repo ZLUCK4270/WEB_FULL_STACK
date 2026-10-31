@@ -1,8 +1,8 @@
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const { getPool } = require('../config/db');
+const { getJwtSecret } = require('../middleware/authMiddleware');
 
-const JWT_SECRET = process.env.JWT_SECRET || 'nova_salud_secreto_curso_2026';
 const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '24h';
 
 /**
@@ -44,7 +44,6 @@ async function login(req, res) {
       `);
 
     if (result.recordset.length === 0) {
-      // Mensaje genérico: no revelar si el DNI existe o no.
       return res.status(401).json({ error: 'Credenciales inválidas' });
     }
 
@@ -60,7 +59,6 @@ async function login(req, res) {
       });
     }
 
-    // Comparación contra hash bcrypt (nunca texto plano).
     const passwordValida = await bcrypt.compare(password, user.password_hash);
 
     if (!passwordValida) {
@@ -88,11 +86,10 @@ async function login(req, res) {
 
     const token = jwt.sign(
       userPayload,
-      JWT_SECRET,
+      getJwtSecret(),
       { expiresIn: JWT_EXPIRES_IN }
     );
 
-    // Actualizar último acceso
     await pool.request()
       .input('id', user.id)
       .query(`
