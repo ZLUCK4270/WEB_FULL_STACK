@@ -12,6 +12,7 @@ import { PurchasesView } from './components/purchases/PurchasesView';
 import { ActiveAlertsView } from './components/alerts/ActiveAlertsView';
 import { CustomersView } from './components/customers/CustomersView';
 import { AuditView } from './components/audit/AuditView';
+import { UsersManagementView } from './components/users/UsersManagementView';
 import { LoginView } from './components/auth/LoginView';
 import { ShieldAlert, ArrowLeft } from 'lucide-react';
 import { useMotion } from './hooks/useMotion';
@@ -25,10 +26,11 @@ export type TabId =
   | 'purchases'
   | 'alerts'
   | 'customers'
+  | 'users'
   | 'audit';
 
 const ROLE_PERMISSIONS: Record<string, TabId[]> = {
-  admin: ['dashboard', 'pos', 'sales', 'inventory', 'cash', 'purchases', 'alerts', 'customers', 'audit'],
+  admin: ['dashboard', 'pos', 'sales', 'inventory', 'cash', 'purchases', 'alerts', 'customers', 'users', 'audit'],
   vendedor: ['pos', 'sales', 'cash', 'customers'],
   cajero: ['pos', 'sales', 'cash', 'customers'],
   almacen: ['dashboard', 'inventory', 'purchases', 'alerts'],
@@ -126,6 +128,7 @@ const MainLayout: React.FC = () => {
                 {currentTab === 'purchases' && <PurchasesView />}
                 {currentTab === 'alerts' && <ActiveAlertsView onNavigate={handleNavigate} />}
                 {currentTab === 'customers' && <CustomersView />}
+                {currentTab === 'users' && <UsersManagementView />}
                 {currentTab === 'audit' && <AuditView />}
               </div>
             )}

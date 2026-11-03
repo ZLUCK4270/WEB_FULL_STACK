@@ -13,6 +13,7 @@ const purchasesRoutes = require('./src/routes/purchasesRoutes');
 const customersRoutes = require('./src/routes/customersRoutes');
 const backupRoutes = require('./src/routes/backupRoutes');
 const dashboardRoutes = require('./src/routes/dashboardRoutes');
+const usersRoutes = require('./src/routes/usersRoutes');
 
 const apiRouter = express.Router();
 
@@ -42,6 +43,7 @@ apiRouter.use('/purchases', purchasesRoutes);
 apiRouter.use('/customers', customersRoutes);
 apiRouter.use('/backups', backupRoutes);
 apiRouter.use('/dashboard', dashboardRoutes);
+apiRouter.use('/users', usersRoutes);
 
 // Ruta de salud
 apiRouter.get('/health', (req, res) => {

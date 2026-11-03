@@ -1,36 +1,56 @@
-# 📋 Reporte de Auditoría QA, Seguridad y DevOps — Botica Nova Salud
+# 📋 Reporte de Auditoría QA, Seguridad y Cumplimiento Funcional — Botica Nova Salud
 
-**Repositorio:** `https://github.com/ZLUCK4270/WEB_FULL_STACK` (`main` → `fix/qa-full-audit`)  
-**Fecha de Auditoría:** 30 de octubre de 2026  
-
----
-
-## 1. Resumen Ejecutivo
-
-- **Estado Inicial (Pre-Auditoría):** **NO APTO PARA PRODUCCIÓN**. Aunque la interfaz y los controladores principales operaban en desarrollo, existían defectos transaccionales en la anulación FEFO (`backend/src/config/db.js` y `backend/src/services/fefoService.js`), dependencias vulnerables no utilizadas (`xlsx@0.18.5`), ausencia total de pruebas automatizadas y CI/CD, script `start` que no activaba el modo producción, y falta de `strict: true` en TypeScript.
-- **Estado Actual (Post-Correcciones Fase 3 y 4):** **APTO PARA PRODUCCIÓN**. Todos los hallazgos críticos, altos, medios y bajos fueron corregidos y verificados con `npm run lint`, `npm test` (5/5 pruebas de integración pasando) y `npm run build` sin advertencias.
-
-### Top 5 Riesgos Principales Detectados y Mitigados
-1. **[CRÍTICO — QA-01] Defecto transaccional en anulación de ventas FEFO:** En `backend/src/config/db.js:1541`, la condición `upper.startsWith('INSERT INTO ITEMS_VENTA')` interceptaba por prefijo común las inserciones de `INSERT INTO ITEMS_VENTA_LOTES`, impidiendo registrar la trazabilidad por lote; además, `UPDATE LOTES` (`db.js:1265`) restaba stock en lugar de sumarlo al anular, y `fefoService.js:312` mutaba una copia en memoria sin ejecutar `UPDATE ventas`.
-2. **[CRÍTICO — QA-02] Dependencia vulnerable `xlsx@0.18.5` y librerías huérfanas:** `package.json:31` incluía `xlsx@^0.18.5` (afectada por *Prototype Pollution* `CVE-2023-30533` y *ReDoS* `CVE-2024-22363`) junto con `jspdf`, `jspdf-autotable`, `recharts`, `motion` y `react-is`, ninguna importada en el código actual.
-3. **[ALTO — QA-03] Script `start` de producción defectuoso y puerto fijo en `server.ts`:** `package.json:9` ejecutaba `"tsx server.ts"` sin `NODE_ENV=production` (levantando Vite en modo desarrollo en producción) y `server.ts:16` fijaba `PORT = 3000` ignorando `process.env.PORT`.
-4. **[ALTO — QA-04] CORS permisivo (`*`) y ausencia de cabeceras de seguridad en API:** `backend/server.js:20` y `server.ts:29` usaban `cors()` abierto ignorando `process.env.CORS_ORIGIN`, y `backend/server.js` carecía de cabeceras `X-Content-Type-Options`, `X-Frame-Options` y `Referrer-Policy`.
-5. **[ALTO — QA-05] Ausencia de pruebas automatizadas, pipeline CI/CD y modo estricto TypeScript:** No existían tests de regresión para validar autenticación JWT, permisos RBAC ni descuento/reversión FEFO; `tsconfig.json` no tenía `"strict": true` y conservaba exclusiones obsoletas (`"prisma"`).
+**Caso Práctico:** Botica "Nova Salud" (Lima, Perú — DIGEMID / BPA / FEFO)  
+**Fecha de Actualización:** 01 de noviembre de 2026  
+**Resultado Global:** **100% DE REQUISITOS CUMPLIDOS — APTO PARA PRODUCCIÓN**
 
 ---
 
-## 2. Tabla Completa de Hallazgos QA
+## 1. Matriz de Cumplimiento de Requisitos del Caso Práctico
 
-| ID | Severidad | Categoría | Archivo:línea | Descripción | Evidencia (Comando / Salida) | Impacto | Corrección Implementada | Esfuerzo |
-| :- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :-: |
-| **QA-01** | **Crítica** | Funcionalidad / BD | `backend/src/config/db.js:1265,1541` y `backend/src/services/fefoService.js:312` | `INSERT INTO ITEMS_VENTA` interceptaba `INSERT INTO ITEMS_VENTA_LOTES`; `UPDATE LOTES` restaba stock al anular; `voidSaleTransaction` no ejecutaba `UPDATE ventas`. | `npm test` (`QA-TEST-04`): `AssertionError: 22 !== 25` tras `POST /api/sales/:id/void`. | Las ventas anuladas no devolvían el stock al lote FEFO ni persistían estado en SQL. | Evaluar `ITEMS_VENTA_LOTES` antes que `ITEMS_VENTA`, soportar `STOCK_ACTUAL + @CANTIDAD` en `UPDATE LOTES` y ejecutar `UPDATE ventas` en `fefoService.js`. | **M** |
-| **QA-02** | **Crítica** | Seguridad / Dependencias | `package.json:21-31` | `xlsx@^0.18.5` instalada con vulnerabilidades CVE-2023-30533 / CVE-2024-22363 junto a 5 paquetes no usados (`jspdf`, `jspdf-autotable`, `motion`, `recharts`, `react-is`). | Inspección de `package.json` y búsqueda de imports en `src/` y `backend/`. | Superficie de ataque innecesaria e incremento del tiempo de instalación. | Eliminación de las 6 dependencias muertas/vulnerables en `package.json`. | **S** |
-| **QA-03** | **Alta** | DevOps / Producción | `package.json:9` y `server.ts:16,36` | Script `"start"` no activaba modo producción y `server.ts:16` fijaba `PORT = 3000` ignorando `process.env.PORT`. | Lectura de `server.ts:16,36` y `package.json:9`. | En producción `npm start` levantaba Vite dev server en el puerto fijo 3000. | Soporte para `--production` y `process.env.PORT` en `server.ts`; actualización de `"start": "tsx server.ts --production"`. | **S** |
-| **QA-04** | **Alta** | Seguridad / Backend | `backend/server.js:20`, `server.ts:29`, `backend/src/middleware/authMiddleware.js:11` | `cors()` abierto a `*` ignorando `CORS_ORIGIN`; falta de cabeceras de seguridad en `backend/server.js`; `JWT_SECRET` duplicado sin advertencia en producción. | `backend/server.js:20` no devolvía `X-Content-Type-Options` ni `X-Frame-Options`. | Exposición a orígenes no autorizados y clickjacking/MIME sniffing. | Configuración de `cors({ origin })` leyendo `CORS_ORIGIN`, cabeceras OWASP en `backend/server.js` y helper `getJwtSecret()`. | **S** |
-| **QA-05** | **Alta** | Pruebas / QA | `tests/api.test.mjs` (nuevo) y `backend/src/middleware/rateLimiter.js:22` | 0% de cobertura de pruebas automatizadas; `setInterval` en `rateLimiter.js:22` sin `.unref()` bloqueaba el cierre del event loop de Node en tests. | `node -e "require('./backend/server.js')"` quedaba colgado indefinidamente. | Imposibilidad de detectar regresiones en login, RBAC o motor FEFO en CI/CD. | Añadido `.unref()` al timer de `rateLimiter.js` y creada suite `tests/api.test.mjs` con 5 tests de integración end-to-end. | **M** |
-| **QA-06** | **Media** | Calidad de Código / TS | `tsconfig.json:1-29` | Falta de `"strict": true` en `tsconfig.json`, exclusión obsoleta `"prisma"`, y ausencia de `.eslintrc.json` / `.prettierrc`. | `tsconfig.json:28` incluía `"exclude": ["prisma", "node_modules"]`. | Errores potenciales de nulabilidad no detectados en compilación. | Activado `"strict": true`, limpiado `exclude`, añadidos `.eslintrc.json` y `.prettierrc`. | **S** |
-| **QA-07** | **Media** | Frontend / UI-UX | `src/App.tsx`, `src/components/Header.tsx`, `src/components/layout/SidebarDrawer.tsx` | Falta de `<LanguageProvider>` en `App.tsx` causaba pantalla blanca en `<LoginView />`; barra de módulos duplicada y drawer superpuesto (`fixed inset-0`). | Capturas de usuario en `localhost:3080` y error `useI18n must be used within a LanguageProvider`. | Caída visual en pantalla de login y superposición sobre tablas de gestión. | Envuelto `App` en `<LanguageProvider>`, eliminado menú duplicado y convertido `SidebarDrawer` en panel lateral colapsable acoplado. | **M** |
-| **QA-08** | **Media** | Base de Datos / RBAC | `database/02_seed.sql:81-84` | El script SQL semilla no otorgaba permisos de `cash`, `alerts` ni `dashboard` al rol Cajero, difiriendo del adaptador `backend/src/config/db.js:124-129`. | Comparación entre `database/02_seed.sql:81-84` y `backend/src/config/db.js:124-129`. | Al ejecutar el seed en SQL Server puro, el Cajero recibía `403` al abrir Caja. | Sincronizada la matriz `permisos_usuario` y precios reales en `database/02_seed.sql`. | **S** |
-| **QA-09** | **Media** | DevOps / CI-CD | `.github/workflows/ci.yml`, `.env.example`, `.dockerignore` | Sin flujo GitHub Actions; `.env.example` sin valores ni `PORT`/`NODE_ENV`; carpeta huérfana `frontend/` en disco no ignorada en `.dockerignore`. | `Get-ChildItem frontend` mostró `frontend/node_modules` (~2.4 MB de rutas). | Builds lentos en Docker y falta de validación continua en GitHub. | Eliminada carpeta residual `frontend/`, actualizado `.dockerignore`, documentado `.env.example` y creado `.github/workflows/ci.yml`. | **M** |
-| **QA-10** | **Baja** | Build / Bundler | `vite.config.ts:11` y `metadata.json:5` | Uso de `__dirname` en proyecto ESM causaba advertencia de `configLoader: 'native'` en Vite 8; `metadata.json` declaraba capacidad Gemini no usada. | Salida de `npm run build`: `(!) Your Vite config uses features that are unsupported... __dirname`. | Advertencias en consola durante el empaquetado de producción. | Reemplazado `__dirname` por `import.meta.dirname` en `vite.config.ts` y limpiado `metadata.json`. | **S** |
+| Requisito / Condición del Caso | Estado | Módulo / Componente Técnico | Descripción de la Solución Implementada |
+| :--- | :---: | :--- | :--- |
+| **Condición 1: Accesible desde dispositivos web y garantizar seguridad en los datos** | ✅ **Cumplido** | `server.ts`, `backend/server.js`, `src/App.tsx`, `authMiddleware.js`, `rbacMiddleware.js` | Sistema web 100% responsivo para PC, tablet y móviles. Autenticación JWT, contraseñas hasheadas con `bcrypt` (cost 10), cabeceras de seguridad OWASP (`nosniff`, `SAMEORIGIN`, `strict-origin`), rate limiting anti-fuerza bruta y matriz RBAC granular. |
+| **Condición 2: Módulo de alertas para reposición de productos con bajo stock** | ✅ **Cumplido** | `backend/src/controllers/alertsController.js`, `src/components/alerts/ActiveAlertsView.tsx`, `purchasesController.js` | Motor de alertas automáticas para: Stock Mínimo, Stock Crítico (quiebre de inventario), Lotes Próximos a Vencer (<30 días) y Vencidos. Vinculado directamente al generador automático de órdenes de reposición. |
+| **Condición 3: Interfaz intuitiva reduciendo tiempo de atención al cliente** | ✅ **Cumplido** | `src/components/pos/PointOfSaleView.tsx`, `src/components/Header.tsx` | Punto de Venta (POS) ergonómico con atajos de teclado (`F2` cobrar, `F4` buscar, `ESC`), buscador instantáneo por código de barras o DCI, sugerencia de bioequivalentes/genéricos en 1 clic y cálculo automático de vuelto. |
+| **Propuesta 1: Gestión centralizada de inventario, ventas y atención al cliente** | ✅ **Cumplido** | `src/App.tsx`, `PharmacyContext.tsx`, `backend/src/config/db.js` | 10 módulos centralizados: Dashboard, POS, Ventas, Inventario, Caja, Compras, Alertas, Clientes, Personal RBAC y Auditoría. |
+| **Propuesta 2: Sistema de registro de ventas** | ✅ **Cumplido** | `backend/src/controllers/salesController.js`, `src/components/sales/SalesHistoryView.tsx` | Registro transaccional de ventas con desglose por lote FEFO, comprobante (Boleta/Factura/Ticket), métodos de pago (Efectivo/Yape/Tarjeta) y auditoría de cajero. |
+| **Propuesta 3: Interfaz que agilice el proceso de atención** | ✅ **Cumplido** | `PointOfSaleView.tsx`, `fefoService.js` | Despacho ultra rápido sin fricciones: pre-selección automática del lote con vencimiento más próximo, sin bloqueos innecesarios y con impresión térmica simulada. |
+| **Propuesta 4: Optimizar la gestión interna para reducir errores en inventario** | ✅ **Cumplido** | `backend/src/services/fefoService.js`, `InventoryBatchesView.tsx` | Despacho FEFO estricto: descuenta del lote más antiguo, bloquea lotes caducados, permite anulación transaccional con reversión de stock y kárdex auditable. |
+| **Requisito Específico: Login normal (sin credenciales por defecto expuestas)** | ✅ **Cumplido** | `src/components/auth/LoginView.tsx` | Pantalla de inicio de sesión profesional y estándar: campos limpios sin datos predeterminados ni tarjetas con contraseñas visibles. |
+| **Requisito Específico: Administrador crea nuevos usuarios y rangos de acceso (RBAC)** | ✅ **Cumplido** | `backend/src/controllers/usersController.js`, `backend/src/routes/usersRoutes.js`, `UsersManagementView.tsx` | Módulo de Personal y Accesos para el Administrador: creación de empleados (DNI, nombres, correo, teléfono, rol y contraseña bcrypt), edición de rangos, alternancia de estado activo/inactivo y reseteo de claves. |
 
+---
+
+## 2. Resumen de Pruebas Automatizadas QA (`npm test`)
+
+La suite automatizada de pruebas de integración end-to-end (`tests/api.test.mjs`) cuenta con **7 pruebas pasando al 100%**:
+
+```text
+✔ QA-TEST-01: Endpoint /api/health responde 200 OK y cabeceras de seguridad OWASP
+✔ QA-TEST-02: Autenticación JWT rechaza credenciales inválidas (401) y acepta perfiles válidos (200)
+✔ QA-TEST-03: Control de Acceso Basado en Roles (RBAC) restringe módulos no autorizados
+✔ QA-TEST-04: Motor Transaccional FEFO descuenta del lote más próximo a vencer, ignora vencidos y revierte stock en anulación
+✔ QA-TEST-05: Alertas de Stock/FEFO y Estadísticas de Dashboard operativas
+✔ QA-TEST-06: Capa de Animaciones Nativas cumple GPU-only, prefers-reduced-motion y presupuesto cero-distracción en POS
+✔ QA-TEST-07: Gestión de Usuarios y Roles RBAC: Administrador crea nuevos usuarios, asigna rangos y restringe accesos
+```
+
+---
+
+## 3. Registro de Hallazgos y Mejoras Implementadas
+
+| ID | Severidad | Categoría | Archivo | Descripción | Corrección Implementada |
+| :- | :--- | :--- | :--- | :--- | :--- |
+| **QA-01** | Crítica | Funcionalidad / BD | `db.js`, `fefoService.js` | Descuento y reversión errónea en lotes FEFO al anular ventas. | Corrección en orden de inserción de tablas, soporte de `+ @CANTIDAD` en update lotes y persistencia de estado. |
+| **QA-02** | Crítica | Seguridad | `package.json` | Dependencia vulnerable `xlsx@0.18.5` y librerías huérfanas. | Remoción de 6 dependencias vulnerables e innecesarias. |
+| **QA-03** | Alta | DevOps / Producción | `server.ts`, `package.json` | Script `start` no activaba modo producción ni leía variable `PORT`. | Implementado flag `--production`, lectura de `PORT` y servicio estático de `/dist`. |
+| **QA-04** | Alta | Seguridad / Backend | `server.js`, `server.ts` | CORS permisivo abierto a `*` y falta de cabeceras OWASP. | Cabeceras HTTP de seguridad OWASP y whitelist de CORS basada en entorno. |
+| **QA-05** | Alta | QA / CI-CD | `tests/api.test.mjs`, `ci.yml` | 0% pruebas automáticas y bloqueo por timers activos. | Timer con `.unref()` en `rateLimiter.js` y creación del pipeline CI en GitHub Actions. |
+| **QA-06** | Media | Tipado TypeScript | `tsconfig.json` | Ausencia de `strict: true` y exclusiones obsoletas. | Activado `strict: true` y corrección de tipos en todo el frontend. |
+| **QA-07** | Media | Frontend / UI-UX | `App.tsx`, `SidebarDrawer.tsx` | Drawer superpuesto sobre tablas y duplicación de barras de navegación. | Panel lateral acoplado colapsable y barra unificada. |
+| **QA-08** | Media | Base de Datos | `02_seed.sql` | Desincronización de permisos en seed puro SQL Server. | Matriz `permisos_usuario` alineada con adaptador transaccional. |
+| **QA-09** | Media | DevOps | `.dockerignore`, `.env.example` | Archivos temporales no ignorados en build de Docker. | `.dockerignore` exhaustivo y `.env.example` documentado. |
+| **QA-10** | Baja | Bundler | `vite.config.ts` | Uso de `__dirname` en ESM generaba advertencias en Vite 8. | Reemplazado por `import.meta.dirname`. |
+| **QA-11** | Media | Seguridad / UX | `LoginView.tsx` | Campos de login pre-rellenados y tarjetas demostrativas con credenciales visibles. | Formulario de login estándar limpio con inputs vacíos, validación de 8 dígitos y show/hide password. |
+| **QA-12** | Alta | Funcionalidad / RBAC | `usersController.js`, `usersRoutes.js`, `UsersManagementView.tsx` | El administrador no podía crear nuevos empleados ni definir rangos de acceso. | Implementado módulo integral de personal con endpoints CRUD protegidos, hash bcrypt, asignación de roles y UI completa. |

@@ -11,6 +11,7 @@ import {
   Banknote,
   Truck,
   ShieldCheck,
+  UserCog,
 } from 'lucide-react';
 import { TabId } from '../../App';
 import { AuthUser } from '../../types/pharmacy';
@@ -35,6 +36,7 @@ const NAV: { id: TabId; label: string; icon: React.ComponentType<{ className?: s
   { id: 'purchases', label: 'Compras y reposición', icon: Truck },
   { id: 'alerts', label: 'Alertas de stock y FEFO', icon: BellRing },
   { id: 'customers', label: 'Clientes y pacientes', icon: Users },
+  { id: 'users', label: 'Personal y accesos', icon: UserCog },
   { id: 'audit', label: 'Auditoría y seguridad', icon: ShieldCheck },
 ];
 

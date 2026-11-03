@@ -1,6 +1,6 @@
 # 🏥 Botica Nova Salud — Sistema Web de Gestión Farmacéutica (ERP + POS + FEFO + RBAC)
 
-Plataforma Full Stack web diseñada para la gestión centralizada y automatizada de inventario por lotes (**FEFO — First-Expire, First-Out**), Punto de Venta (POS) ágil con buscador de sustitutos bioequivalentes (DCI), control de caja por turnos, compras/reposición automática, alertas en tiempo real y auditoría forense bajo estándares **DIGEMID / BPA / SUNAT**.
+Plataforma Full Stack web diseñada para la gestión centralizada y automatizada de inventario por lotes (**FEFO — First-Expire, First-Out**), Punto de Venta (POS) ágil con buscador de sustitutos bioequivalentes (DCI), control de caja por turnos, compras/reposición automática, alertas en tiempo real, gestión de empleados con rangos de acceso (RBAC) y auditoría forense bajo estándares **DIGEMID / BPA / SUNAT**.
 
 ---
 
@@ -8,10 +8,10 @@ Plataforma Full Stack web diseñada para la gestión centralizada y automatizada
 
 | Capa | Tecnologías | Propósito |
 | :--- | :--- | :--- |
-| **Frontend (SPA)** | React 19, TypeScript 7 (`strict`), Vite 8, Tailwind CSS v4, Lucide Icons, Axios | Interfaz clínica adaptativa (Modo Claro/Oscuro), panel lateral colapsable sin superposición, POS con atajos (`F2`, `F4`, `ESC`) |
-| **Backend (API REST)** | Node.js 22, Express 4, JWT (`jsonwebtoken`), `bcryptjs`, Rate Limiter en memoria | Autenticación segura, RBAC granular por módulo/acción, motor transaccional FEFO, cabeceras OWASP |
-| **Datos y Esquema SQL** | Microsoft SQL Server 2022 (`database/*.sql`) + Adaptador Transaccional (`backend/src/config/db.js`) | 18 tablas relacionales en español, semillas pre-cargadas con catálogo farmacéutico peruano real |
-| **DevOps & QA** | Docker Multi-Stage, Nginx Reverse Proxy, Docker Compose, GitHub Actions CI, `node:test` | Contenedores aislados (`3080:80` y `8081:8081`), pruebas de integración automatizadas |
+| **Frontend (SPA)** | React 19, TypeScript 7 (`strict`), Vite 8, Tailwind CSS v4, Lucide Icons, Axios | Interfaz clínica adaptativa (Modo Claro/Oscuro), panel lateral colapsable acoplado, POS con atajos (`F2`, `F4`, `ESC`) y módulo de administración de personal |
+| **Backend (API REST)** | Node.js 22, Express 4, JWT (`jsonwebtoken`), `bcryptjs`, Rate Limiter en memoria | Autenticación segura estándar, control de acceso RBAC granular por rol/módulo, motor transaccional FEFO, cabeceras OWASP |
+| **Datos y Esquema SQL** | Microsoft SQL Server 2022 (`database/*.sql`) + Adaptador Transaccional (`backend/src/config/db.js`) | 18 tablas relacionales en español, semillas pre-cargadas con catálogo farmacéutico peruano real y usuarios con contraseñas encriptadas con bcrypt |
+| **DevOps & QA** | Docker Multi-Stage, Nginx Reverse Proxy, Docker Compose, GitHub Actions CI, `node:test` | Contenedores aislados (`3080:80` y `8081:8081`), suite de 7 pruebas de integración automatizadas |
 
 ---
 
@@ -23,9 +23,9 @@ WEB_FULL_STACK/
 ├── backend/                   # Servidor API REST Express (CommonJS)
 │   ├── src/
 │   │   ├── config/db.js       # Adaptador SQL transaccional + datos semilla realistas
-│   │   ├── controllers/       # Controladores (auth, sales, inventory, cash, purchases, alerts, audit, customers, backups, dashboard)
+│   │   ├── controllers/       # Controladores (auth, users, sales, inventory, cash, purchases, alerts, audit, customers, backups, dashboard)
 │   │   ├── middleware/        # authMiddleware (JWT), rbacMiddleware, rateLimiter
-│   │   ├── routes/            # Enrutadores modulares bajo /api/*
+│   │   ├── routes/            # Enrutadores modulares bajo /api/* (/auth, /users, /sales, etc.)
 │   │   └── services/          # fefoService.js (despacho y anulación FEFO) y backupService.js
 │   ├── Dockerfile             # Imagen Node 22 Alpine para producción
 │   └── server.js              # Punto de entrada API (:8081)
@@ -35,13 +35,25 @@ WEB_FULL_STACK/
 │   ├── 03_migration.sql       # Migraciones de autenticación y campos extendidos
 │   └── 03_seed_auth.sql       # Hashes bcrypt de usuarios iniciales
 ├── src/                       # Frontend React 19 + TypeScript + Tailwind v4
-│   ├── components/            # Vistas modulares (dashboard, pos, sales, inventory, cash, purchases, alerts, customers, audit, auth, layout)
+│   ├── components/            # Vistas modulares:
+│   │   ├── auth/              # LoginView.tsx (Login limpio estándar sin datos predeterminados en pantalla)
+│   │   ├── users/             # UsersManagementView.tsx (Gestión de Personal & Rangos RBAC)
+│   │   ├── dashboard/         # DashboardView.tsx (Métricas y KPIs en tiempo real)
+│   │   ├── pos/               # PointOfSaleView.tsx (Punto de Venta ágil, FEFO, sustitutos DCI)
+│   │   ├── sales/             # SalesHistoryView.tsx (Historial y anulación con reversión de stock)
+│   │   ├── inventory/         # InventoryBatchesView.tsx (Stock, lotes FEFO, kárdex y ajustes)
+│   │   ├── cash/              # CashRegisterView.tsx (Apertura, arqueo y cierre por turnos)
+│   │   ├── purchases/         # PurchasesView.tsx (Compras y sugerencias de reposición automática)
+│   │   ├── alerts/            # ActiveAlertsView.tsx (Alertas de stock mínimo, crítico y vencimiento)
+│   │   ├── customers/         # CustomersView.tsx (Directorio de clientes y pacientes)
+│   │   ├── audit/             # AuditView.tsx (Bitácora forense de auditoría)
+│   │   └── layout/            # SidebarDrawer.tsx, MobileNavigationDock.tsx, Header.tsx
 │   ├── context/               # PharmacyContext.tsx (estado global sincronizado)
 │   ├── i18n/                  # Contexto de idioma y diccionario ES/EN
 │   ├── services/              # Cliente Axios con interceptores JWT (api.js, pharmacyApi.js)
 │   └── types/                 # Contratos TypeScript (pharmacy.ts)
 ├── tests/
-│   └── api.test.mjs           # Suite automatizada de pruebas QA (Salud, JWT, RBAC, FEFO, Alertas)
+│   └── api.test.mjs           # Suite de 7 pruebas QA (Salud, JWT, RBAC, FEFO, Alertas, Usuarios)
 ├── Dockerfile                 # Build Multi-Stage Frontend (Node 22 -> Nginx Alpine)
 ├── docker-compose.yml         # Orquestación completa (sqlserver + backend + frontend)
 ├── nginx.conf                 # Servidor SPA y Reverse Proxy (/api -> backend:8081)
@@ -81,27 +93,38 @@ Copie `.env.example` a `.env` en la raíz del proyecto:
 | `npm start` | `tsx server.ts --production` | Inicia el servidor en modo producción sirviendo `/dist` y `/api` |
 | `npm run lint` | `tsc --noEmit` | Verificación estática de tipos con TypeScript (`strict: true`) |
 | `npm run typecheck` | `tsc --noEmit` | Alias de verificación estricta de tipos |
-| `npm test` | `node --test tests/api.test.mjs` | Ejecuta las pruebas de integración de API, JWT, RBAC y motor FEFO |
-| `npm run format` | `node -e ...` | Verifica formato y finales de línea UTF-8 LF |
+| `npm test` | `node --test tests/api.test.mjs` | Ejecuta las 7 pruebas de integración (Salud, JWT, RBAC, FEFO, Alertas, Usuarios y Permisos) |
+| `npm run format` | `node -e ...` | Verifica formato y codificación UTF-8 |
 | `npm run db:generate` | `node -e ...` | Valida el esquema SQL (`database/01_schema.sql`) y el adaptador |
 | `npm run db:migrate` | `node -e ...` | Verifica sincronización de migraciones (`database/03_migration.sql`) |
 | `npm run db:seed` | `node -e ...` | Verifica los datos semilla cargados (productos, lotes FEFO, usuarios) |
 
 ---
 
-## 🔑 Credenciales de Prueba Pre-cargadas (RBAC)
+## 🔐 Matriz de Rangos de Acceso (RBAC) y Credenciales de Acceso
 
-| Rol | Usuario | DNI | Contraseña | Permisos Habilitados |
+La pantalla de inicio de sesión es **estándar y limpia**, sin usuarios pre-rellenados ni botones demostrativos expuestos públicamente. Para ingresar, los usuarios utilizan sus credenciales asignadas:
+
+| Rango de Acceso (Rol) | Empleado por Defecto | DNI | Contraseña | Módulos y Permisos Habilitados |
 | :--- | :--- | :--- | :--- | :--- |
-| **Q.F. Regente / Admin** | Carlos Alberto Mendoza Vera | `10203040` | `regente2026` | Acceso total a los 9 módulos + Respaldos y Auditoría |
-| **Cajero POS** | Juan Manuel Pérez García | `71829304` | `caja2026` | Punto de Venta, Historial Ventas, Caja y Turnos, Clientes |
-| **Jefe de Almacén** | Luis Enrique Torres Valdivia | `76543210` | `almacen2026` | Panel General, Inventario y Lotes FEFO, Compras, Alertas |
+| **Q.F. Regente / Administrador General** | Carlos Alberto Mendoza Vera | `10203040` | `regente2026` | **Acceso total a los 10 módulos:** Dashboard, POS, Ventas, Inventario y Lotes FEFO, Caja, Compras, Alertas, Clientes, **Personal y Accesos RBAC**, Auditoría. Puede crear y editar usuarios. |
+| **Cajero POS / Vendedor Mostrador** | Juan Manuel Pérez García | `71829304` | `caja2026` | Punto de Venta (POS), Historial de Ventas, Caja Registradora / Arqueo y Clientes. Restringido para compras, inventario admin y personal. |
+| **Encargado de Almacén / Control BPA** | Luis Enrique Torres Valdivia | `76543210` | `almacen2026` | Panel de Control, Inventario y Lotes FEFO, Compras y Reposición, Alertas de Stock y Vencimiento. Restringido para ventas y caja. |
+
+### 👥 Creación de Nuevos Empleados por el Administrador
+Desde el módulo **"Personal y accesos"** (`/api/users`), el Administrador General puede:
+1. Crear nuevos usuarios especificando DNI (8 dígitos), nombres, apellidos, correo, teléfono, cargo y contraseña inicial (encriptada con `bcrypt`).
+2. Asignar el **Rango de Acceso (Rol)** deseado (`admin`, `vendedor`, `almacen`), con configuración automática de los permisos del sistema.
+3. Editar datos personales, modificar rangos de acceso o restablecer contraseñas de cualquier empleado.
+4. Activar o desactivar cuentas en tiempo real (bloqueando de inmediato su acceso al sistema).
 
 ---
 
 ## 🚀 Instalación y Despliegue Paso a Paso
 
-### Opción A: Despliegue con Docker Compose (Recomendado para Producción / Evaluación)
+> 💡 **¿Buscas desplegar en la nube 100% gratis?** Consulta la guía paso a paso en [**DOCKER_Y_DESPLIEGUE.md**](./DOCKER_Y_DESPLIEGUE.md).
+
+### Opción A: Despliegue con Docker Compose (Recomendado para Evaluación Completa)
 1. Construir y levantar los 3 contenedores (`sqlserver`, `backend`, `frontend`):
    ```powershell
    docker compose up -d --build
@@ -113,15 +136,14 @@ Copie `.env.example` a `.env` en la raíz del proyecto:
 1. Instalar dependencias:
    ```powershell
    npm install
-   npm --prefix backend install
    ```
-2. Verificar tipos, pruebas automatizadas y compilación de producción:
+2. Ejecutar pruebas automatizadas y compilación de producción:
    ```powershell
    npm run lint
    npm test
    npm run build
    ```
-3. Arrancar en modo producción:
+3. Iniciar el servidor unificado en modo producción:
    ```powershell
    npm start
    ```

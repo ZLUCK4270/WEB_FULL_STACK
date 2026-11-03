@@ -15,6 +15,7 @@ import {
   PanelLeftOpen,
   Sun,
   Moon,
+  UserCog,
 } from 'lucide-react';
 import { TabId } from '../App';
 import { AuthUser } from '../types/pharmacy';
@@ -53,6 +54,7 @@ export const Header: React.FC<HeaderProps> = ({
     purchases: { label: 'Compras y reposición', icon: Truck },
     alerts: { label: 'Alertas de stock y FEFO', icon: Bell },
     customers: { label: 'Clientes y pacientes', icon: Users },
+    users: { label: 'Personal y accesos', icon: UserCog },
     audit: { label: 'Auditoría y seguridad', icon: ShieldCheck },
   };
 

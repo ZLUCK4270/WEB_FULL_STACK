@@ -3,14 +3,14 @@ import {
   Activity,
   Lock,
   UserCheck,
-  ShieldCheck,
-  ShoppingCart,
-  Package,
   AlertCircle,
-  CheckCircle2,
   Eye,
   EyeOff,
   Sparkles,
+  ShieldCheck,
+  Layers,
+  Zap,
+  CheckCircle2,
 } from 'lucide-react';
 import { usePharmacy } from '../../context/PharmacyContext';
 import { useI18n } from '../../i18n/I18nContext';
@@ -21,14 +21,13 @@ export const LoginView: React.FC = () => {
   const { t } = useI18n();
   useCursorGlow();
 
-  const [dni, setDni] = useState('10203040');
-  const [password, setPassword] = useState('regente2026');
+  const [dni, setDni] = useState('');
+  const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [errorTick, setErrorTick] = useState(0);
   const [loading, setLoading] = useState(false);
 
-  // Cada fallo incrementa el contador → el aviso se re-monta y vuelve a vibrar.
   const showError = (message: string) => {
     setError(message);
     setErrorTick((n) => n + 1);
@@ -37,27 +36,34 @@ export const LoginView: React.FC = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+
+    const cleanDni = dni.trim();
+    if (!cleanDni) {
+      showError('Por favor, ingrese su número de DNI.');
+      return;
+    }
+
+    if (!password) {
+      showError('Por favor, ingrese su contraseña.');
+      return;
+    }
+
     setLoading(true);
     try {
-      const result = await login(dni.trim(), password);
+      const result = await login(cleanDni, password);
       if (!result.success) {
         showError(result.error || 'Credenciales inválidas. Verifique su DNI y contraseña.');
       }
     } catch (err: any) {
-      showError(err.message || 'Error al iniciar sesión');
+      showError(err.message || 'Error de conexión con el servidor de autenticación');
     } finally {
       setLoading(false);
     }
   };
 
-  const quickSelectRole = (roleDni: string, rolePass: string) => {
-    setDni(roleDni);
-    setPassword(rolePass);
-    setError('');
-  };
-
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col lg:flex-row relative overflow-hidden">
+      {/* Luces de fondo difuminadas */}
       <div
         data-parallax="1"
         className="m-float absolute -top-40 -left-40 w-96 h-96 bg-teal-500/20 rounded-full blur-3xl pointer-events-none"
@@ -67,7 +73,7 @@ export const LoginView: React.FC = () => {
         className="m-float-alt absolute -bottom-40 -right-40 w-96 h-96 bg-emerald-500/15 rounded-full blur-3xl pointer-events-none"
       />
 
-      {/* Left panel: Case Study & System Highlights */}
+      {/* Panel Izquierdo: Presentación Institucional y Cumplimiento Normativo */}
       <div className="lg:w-7/12 p-8 lg:p-14 flex flex-col justify-between border-b lg:border-b-0 lg:border-r border-slate-800/80 bg-slate-900/50 backdrop-blur-sm">
         <div data-stagger="90">
           <div
@@ -87,60 +93,55 @@ export const LoginView: React.FC = () => {
                 Botica Nova Salud
               </h1>
               <p className="text-sm text-slate-400 font-medium">
-                Plataforma Integral de Inventario FEFO, Punto de Venta y Atención Farmacéutica
+                Gestión Integral de Farmacia: Inventario FEFO, Ventas POS y Control de Personal
               </p>
             </div>
           </div>
 
           <p data-reveal="up" className="text-slate-300 text-sm lg:text-base leading-relaxed mb-8 max-w-2xl">
-            Solución diseñada para optimizar la dispensación farmacéutica en zonas de alta demanda,
-            eliminando quiebres de stock mediante alertas automáticas, control estricto de lotes
-            FEFO (<em>First-Expire, First-Out</em>) y un Punto de Venta ágil con buscador de
-            bioequivalentes DCI.
+            Solución tecnológica diseñada para optimizar los procesos de dispensación, control de
+            inventario y atención al paciente en zonas comerciales de alta rotación, garantizando
+            seguridad de la información y cumplimiento de Buenas Prácticas de Almacenamiento (BPA).
           </p>
 
           <div data-stagger="110" className="grid grid-cols-1 sm:grid-cols-2 gap-4 max-w-2xl">
             <div data-reveal="up" data-spotlight className="p-4 rounded-2xl bg-slate-900/90 border border-slate-800/90">
               <div className="flex items-center gap-2.5 text-teal-400 font-bold text-sm mb-1">
-                <CheckCircle2 className="w-4 h-4 shrink-0" />
-                Despacho FEFO Automatizado
+                <Layers className="w-4 h-4 shrink-0" />
+                Despacho FEFO Estricto
               </div>
               <p className="text-xs text-slate-400 leading-relaxed">
-                Descuenta automáticamente del lote más próximo a vencer y bloquea lotes vencidos
-                en mostrador.
+                Prioriza automáticamente los lotes más próximos a caducar y bloquea productos vencidos.
               </p>
             </div>
 
             <div data-reveal="up" data-spotlight className="p-4 rounded-2xl bg-slate-900/90 border border-slate-800/90">
               <div className="flex items-center gap-2.5 text-amber-400 font-bold text-sm mb-1">
                 <CheckCircle2 className="w-4 h-4 shrink-0" />
-                Motor de Alertas y Reposición
+                Alertas de Reposición Automáticas
               </div>
               <p className="text-xs text-slate-400 leading-relaxed">
-                Detección en tiempo real de stock crítico, agotados y vencimientos con generación
-                automática de órdenes de compra.
+                Supervisión continua de quiebres de stock y generación ágil de órdenes de reabastecimiento.
               </p>
             </div>
 
             <div data-reveal="up" data-spotlight className="p-4 rounded-2xl bg-slate-900/90 border border-slate-800/90">
               <div className="flex items-center gap-2.5 text-emerald-400 font-bold text-sm mb-1">
-                <CheckCircle2 className="w-4 h-4 shrink-0" />
-                Atención Rápida y Sustitutos DCI
+                <Zap className="w-4 h-4 shrink-0" />
+                Punto de Venta Ultra Rápido
               </div>
               <p className="text-xs text-slate-400 leading-relaxed">
-                Atajos de teclado, cálculo de vuelto instantáneo y sugerencia de medicamentos
-                genéricos o equivalentes en 1 clic.
+                Búsqueda por DCI / Principio Activo, sugerencia de genéricos y cálculo instantáneo de vuelto.
               </p>
             </div>
 
             <div data-reveal="up" data-spotlight className="p-4 rounded-2xl bg-slate-900/90 border border-slate-800/90">
               <div className="flex items-center gap-2.5 text-indigo-400 font-bold text-sm mb-1">
-                <CheckCircle2 className="w-4 h-4 shrink-0" />
-                Seguridad JWT y Auditoría RBAC
+                <ShieldCheck className="w-4 h-4 shrink-0" />
+                Control de Acceso RBAC & Auditoría
               </div>
               <p className="text-xs text-slate-400 leading-relaxed">
-                Permisos granulares por rol (Químico Regente, Cajero, Almacén), bitácora inmutable
-                y arqueo de caja por turno.
+                Permisos asignados por el administrador para nuevos empleados (Admin, Cajero, Almacén).
               </p>
             </div>
           </div>
@@ -148,106 +149,57 @@ export const LoginView: React.FC = () => {
 
         <div className="mt-8 pt-6 border-t border-slate-800/80 flex flex-wrap items-center justify-between gap-4 text-xs text-slate-400">
           <span>RUC: 20608941521 · Av. Próceres de la Independencia 2450, Lima</span>
-          <span className="text-teal-400 font-semibold">v2.5 Producción · Base de Datos Activa</span>
+          <span className="text-teal-400 font-semibold">v2.5 Producción · Servidor Activo</span>
         </div>
       </div>
 
-      {/* Right panel: Login Form + Quick Role Switcher */}
+      {/* Panel Derecho: Formulario de Login Estándar y Seguro */}
       <div className="lg:w-5/12 p-8 lg:p-14 flex flex-col justify-center">
         <div data-reveal="left" className="max-w-md w-full mx-auto">
-          <div className="mb-6">
+          <div className="mb-8">
             <h2 className="text-2xl font-extrabold text-white">{t('login_title')}</h2>
-            <p className="text-sm text-slate-400 mt-1">
-              Ingrese con su DNI o seleccione un perfil demostrativo para evaluar el sistema.
+            <p className="text-sm text-slate-400 mt-2">
+              Ingrese su DNI y contraseña personal asignada por la administración de la botica.
             </p>
-          </div>
-
-          <div className="mb-6">
-            <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-2.5">
-              Acceso Rápido por Rol (Demostración del Caso Práctico)
-            </p>
-            <div className="grid grid-cols-3 gap-2.5">
-              <button
-                type="button"
-                data-ripple
-                onClick={() => quickSelectRole('10203040', 'regente2026')}
-                className={`p-3 rounded-xl border text-left transition-all cursor-pointer ${
-                  dni === '10203040'
-                    ? 'bg-teal-500/15 border-teal-500 text-white shadow-sm'
-                    : 'bg-slate-900/90 border-slate-800 text-slate-300 hover:border-slate-700'
-                }`}
-              >
-                <ShieldCheck className="w-4 h-4 text-teal-400 mb-1" />
-                <div className="text-xs font-bold">Admin / Q.F.</div>
-                <div className="text-[10px] text-slate-400 font-mono">DNI: 10203040</div>
-              </button>
-
-              <button
-                type="button"
-                data-ripple
-                onClick={() => quickSelectRole('71829304', 'caja2026')}
-                className={`p-3 rounded-xl border text-left transition-all cursor-pointer ${
-                  dni === '71829304'
-                    ? 'bg-teal-500/15 border-teal-500 text-white shadow-sm'
-                    : 'bg-slate-900/90 border-slate-800 text-slate-300 hover:border-slate-700'
-                }`}
-              >
-                <ShoppingCart className="w-4 h-4 text-sky-400 mb-1" />
-                <div className="text-xs font-bold">Cajero POS</div>
-                <div className="text-[10px] text-slate-400 font-mono">DNI: 71829304</div>
-              </button>
-
-              <button
-                type="button"
-                data-ripple
-                onClick={() => quickSelectRole('76543210', 'almacen2026')}
-                className={`p-3 rounded-xl border text-left transition-all cursor-pointer ${
-                  dni === '76543210'
-                    ? 'bg-teal-500/15 border-teal-500 text-white shadow-sm'
-                    : 'bg-slate-900/90 border-slate-800 text-slate-300 hover:border-slate-700'
-                }`}
-              >
-                <Package className="w-4 h-4 text-amber-400 mb-1" />
-                <div className="text-xs font-bold">Almacén</div>
-                <div className="text-[10px] text-slate-400 font-mono">DNI: 76543210</div>
-              </button>
-            </div>
           </div>
 
           {error && (
             <div
               key={errorTick}
               role="alert"
-              className="m-shake mb-5 p-3.5 rounded-xl bg-rose-500/10 border border-rose-500/30 flex items-start gap-2.5 text-rose-300 text-xs font-medium"
+              className="m-shake mb-6 p-4 rounded-xl bg-rose-500/10 border border-rose-500/30 flex items-start gap-3 text-rose-300 text-xs font-medium leading-relaxed"
             >
-              <AlertCircle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
+              <AlertCircle className="w-5 h-5 text-rose-400 shrink-0 mt-0.5" />
               <span>{error}</span>
             </div>
           )}
 
-          <form onSubmit={handleSubmit} className="space-y-4">
+          <form onSubmit={handleSubmit} className="space-y-5">
             <div>
-              <label className="block text-xs font-bold text-slate-300 mb-1.5">
-                DNI del Usuario (8 dígitos)
+              <label className="block text-xs font-bold text-slate-300 mb-2">
+                DNI del Empleado (8 dígitos)
               </label>
               <div className="relative">
                 <UserCheck className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
                 <input
                   type="text"
                   value={dni}
-                  onChange={(e) => setDni(e.target.value)}
+                  onChange={(e) => setDni(e.target.value.replace(/\D/g, '').slice(0, 8))}
                   maxLength={8}
                   required
-                  placeholder="Ej. 10203040"
-                  className="w-full pl-10 pr-4 py-3 rounded-xl bg-slate-900 border border-slate-800 text-white text-sm font-mono focus:outline-none focus:border-teal-500"
+                  autoFocus
+                  placeholder="Ingrese su número de DNI"
+                  className="w-full pl-10 pr-4 py-3 rounded-xl bg-slate-900 border border-slate-800 text-white text-sm font-mono placeholder:text-slate-500 focus:outline-none focus:border-teal-500 transition-colors"
                 />
               </div>
             </div>
 
             <div>
-              <label className="block text-xs font-bold text-slate-300 mb-1.5">
-                Contraseña de Acceso
-              </label>
+              <div className="flex items-center justify-between mb-2">
+                <label className="block text-xs font-bold text-slate-300">
+                  Contraseña de Acceso
+                </label>
+              </div>
               <div className="relative">
                 <Lock className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
                 <input
@@ -255,13 +207,16 @@ export const LoginView: React.FC = () => {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   required
-                  placeholder="••••••••"
-                  className="w-full pl-10 pr-10 py-3 rounded-xl bg-slate-900 border border-slate-800 text-white text-sm focus:outline-none focus:border-teal-500"
+                  placeholder="Ingrese su contraseña"
+                  className="w-full pl-10 pr-11 py-3 rounded-xl bg-slate-900 border border-slate-800 text-white text-sm placeholder:text-slate-500 focus:outline-none focus:border-teal-500 transition-colors"
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-200"
+                  tabIndex={-1}
+                  className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-200 p-1"
+                  title={showPassword ? 'Ocultar contraseña' : 'Ver contraseña'}
+                  aria-label={showPassword ? 'Ocultar contraseña' : 'Ver contraseña'}
                 >
                   {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 </button>
@@ -273,11 +228,27 @@ export const LoginView: React.FC = () => {
               disabled={loading}
               data-magnetic="0.18"
               data-ripple
-              className="m-gradient-flow w-full py-3.5 px-5 rounded-xl bg-gradient-to-r from-teal-500 to-emerald-600 text-white font-bold text-sm shadow-lg shadow-teal-600/25 transition-all disabled:opacity-50 cursor-pointer"
+              className="m-gradient-flow w-full py-3.5 px-5 rounded-xl bg-gradient-to-r from-teal-500 to-emerald-600 text-white font-bold text-sm shadow-lg shadow-teal-600/25 transition-all disabled:opacity-50 cursor-pointer flex items-center justify-center gap-2"
             >
-              {loading ? 'Autenticando credenciales...' : t('login_btn')}
+              {loading ? (
+                <>
+                  <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                  <span>Autenticando credenciales...</span>
+                </>
+              ) : (
+                <span>{t('login_btn')}</span>
+              )}
             </button>
           </form>
+
+          <div className="mt-8 pt-6 border-t border-slate-800/80">
+            <div className="p-3.5 rounded-xl bg-slate-900/60 border border-slate-800/80 flex items-start gap-3">
+              <ShieldCheck className="w-4 h-4 text-teal-400 shrink-0 mt-0.5" />
+              <div className="text-[11px] text-slate-400 leading-relaxed">
+                <span className="font-semibold text-slate-300">Seguridad Institucional:</span> Las cuentas y rangos de acceso son gestionados centralizadamente por el Administrador General desde el módulo de Personal.
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     </div>

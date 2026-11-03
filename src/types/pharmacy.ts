@@ -235,3 +235,46 @@ export interface AuditLog {
   datosNuevos?: string;
   fecha: string;
 }
+
+export interface SystemUser {
+  id: string;
+  dni: string;
+  nombre: string;
+  apellido: string;
+  name: string;
+  correo?: string | null;
+  telefono?: string | null;
+  cargo: string;
+  role: UserRole;
+  rol: UserRole;
+  roleTitle: string;
+  isRootAdmin: boolean;
+  esAdministradorRaiz: boolean;
+  esta_activo: boolean;
+  ultimo_acceso?: string | null;
+  fecha_creacion?: string;
+  fecha_actualizacion?: string;
+}
+
+export interface CreateUserDto {
+  dni: string;
+  nombre: string;
+  apellido: string;
+  correo?: string;
+  telefono?: string;
+  cargo?: string;
+  role: UserRole;
+  password: string;
+  esta_activo?: boolean;
+}
+
+export interface UpdateUserDto {
+  nombre?: string;
+  apellido?: string;
+  correo?: string;
+  telefono?: string;
+  cargo?: string;
+  role?: UserRole;
+  password?: string;
+  esta_activo?: boolean;
+}

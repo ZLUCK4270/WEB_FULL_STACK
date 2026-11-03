@@ -1212,28 +1212,102 @@ class MockRequest {
     const upper = sql.toUpperCase();
     const inputs = this.inputs;
 
-    // 1. SELECT perfiles_usuario WHERE dni = @dni
-    if (upper.includes('FROM PERFILES_USUARIO') && upper.includes('WHERE DNI = @DNI')) {
-      const user = tables.perfiles_usuario.find(u => String(u.dni).trim() === String(inputs.dni).trim());
-      return { recordset: user ? [{ ...user }] : [], rowsAffected: [user ? 1 : 0] };
+    // 1. SELECT perfiles_usuario
+    if (upper.includes('FROM PERFILES_USUARIO')) {
+      if (upper.includes('WHERE DNI = @DNI') || upper.includes('WHERE DNI = @dni')) {
+        const dniVal = String(inputs.dni || inputs.DNI || '').trim();
+        const user = tables.perfiles_usuario.find(u => String(u.dni).trim() === dniVal);
+        return { recordset: user ? [{ ...user }] : [], rowsAffected: [user ? 1 : 0] };
+      }
+      if (upper.includes('WHERE ID = @ID') || upper.includes('WHERE ID = @id') || upper.includes('WHERE ID = @USUARIOID')) {
+        const targetId = inputs.id || inputs.ID || inputs.usuarioId;
+        const user = tables.perfiles_usuario.find(u => u.id === targetId);
+        return { recordset: user ? [{ ...user }] : [], rowsAffected: [user ? 1 : 0] };
+      }
+      const list = tables.perfiles_usuario.map(u => ({ ...u }));
+      return { recordset: list, rowsAffected: [list.length] };
     }
 
-    // 2. UPDATE perfiles_usuario SET ultimo_acceso = ... WHERE id = @id
+    // 2. INSERT INTO perfiles_usuario
+    if (upper.startsWith('INSERT INTO PERFILES_USUARIO')) {
+      const newId = inputs.id || uuidv4();
+      const newUser = {
+        id: newId,
+        dni: String(inputs.dni || '').trim(),
+        nombre: inputs.nombre || '',
+        apellido: inputs.apellido || '',
+        correo: inputs.correo || null,
+        telefono: inputs.telefono || null,
+        cargo: inputs.cargo || 'Personal de Farmacia',
+        es_administrador_raiz: inputs.es_administrador_raiz ? 1 : 0,
+        esta_activo: inputs.esta_activo !== undefined ? (inputs.esta_activo ? 1 : 0) : 1,
+        debe_cambiar_clave: inputs.debe_cambiar_clave ? 1 : 0,
+        password_hash: inputs.password_hash || '',
+        ultimo_acceso: null,
+        ip_ultimo_acceso: null,
+        fecha_creacion: new Date().toISOString(),
+        fecha_actualizacion: new Date().toISOString()
+      };
+      tables.perfiles_usuario.push(newUser);
+      return { recordset: [{ id: newId }], rowsAffected: [1] };
+    }
+
+    // 3. UPDATE perfiles_usuario
     if (upper.startsWith('UPDATE PERFILES_USUARIO')) {
-      const user = tables.perfiles_usuario.find(u => u.id === inputs.id);
+      const targetId = inputs.id || inputs.ID;
+      const user = tables.perfiles_usuario.find(u => u.id === targetId);
       if (user) {
-        user.ultimo_acceso = new Date().toISOString();
+        if (inputs.nombre !== undefined) user.nombre = inputs.nombre;
+        if (inputs.apellido !== undefined) user.apellido = inputs.apellido;
+        if (inputs.correo !== undefined) user.correo = inputs.correo;
+        if (inputs.telefono !== undefined) user.telefono = inputs.telefono;
+        if (inputs.cargo !== undefined) user.cargo = inputs.cargo;
+        if (inputs.es_administrador_raiz !== undefined) user.es_administrador_raiz = inputs.es_administrador_raiz ? 1 : 0;
+        if (inputs.esta_activo !== undefined) user.esta_activo = inputs.esta_activo ? 1 : 0;
+        if (inputs.password_hash !== undefined) user.password_hash = inputs.password_hash;
+        if (inputs.debe_cambiar_clave !== undefined) user.debe_cambiar_clave = inputs.debe_cambiar_clave ? 1 : 0;
+        if (upper.includes('ULTIMO_ACCESO =')) user.ultimo_acceso = new Date().toISOString();
         user.fecha_actualizacion = new Date().toISOString();
       }
       return { recordset: [], rowsAffected: [user ? 1 : 0] };
     }
 
-    // 3. RBAC Check: SELECT puede_ver, puede_crear... FROM permisos_usuario
-    if (upper.includes('FROM PERMISOS_USUARIO') && upper.includes('WHERE USUARIO_ID = @USUARIOID')) {
-      const match = tables.permisos_usuario.filter(
-        p => p.usuario_id === inputs.usuarioId && p.modulo_id === inputs.moduloId
-      );
-      return { recordset: match.map(p => ({ ...p })), rowsAffected: [match.length] };
+    // 4. RBAC Check / Permisos Usuario
+    if (upper.includes('FROM PERMISOS_USUARIO')) {
+      if (upper.includes('WHERE USUARIO_ID = @USUARIOID') && upper.includes('AND MODULO_ID = @MODULOID')) {
+        const match = tables.permisos_usuario.filter(
+          p => p.usuario_id === inputs.usuarioId && p.modulo_id === inputs.moduloId
+        );
+        return { recordset: match.map(p => ({ ...p })), rowsAffected: [match.length] };
+      }
+      if (upper.includes('WHERE USUARIO_ID = @USUARIOID') || upper.includes('WHERE USUARIO_ID = @ID')) {
+        const uid = inputs.usuarioId || inputs.id;
+        const match = tables.permisos_usuario.filter(p => p.usuario_id === uid);
+        return { recordset: match.map(p => ({ ...p })), rowsAffected: [match.length] };
+      }
+      return { recordset: tables.permisos_usuario.map(p => ({ ...p })), rowsAffected: [tables.permisos_usuario.length] };
+    }
+
+    // 5. DELETE FROM permisos_usuario
+    if (upper.startsWith('DELETE FROM PERMISOS_USUARIO') && upper.includes('WHERE USUARIO_ID = @USUARIOID')) {
+      const before = tables.permisos_usuario.length;
+      tables.permisos_usuario = tables.permisos_usuario.filter(p => p.usuario_id !== inputs.usuarioId);
+      return { recordset: [], rowsAffected: [before - tables.permisos_usuario.length] };
+    }
+
+    // 6. INSERT INTO permisos_usuario
+    if (upper.startsWith('INSERT INTO PERMISOS_USUARIO')) {
+      const newPerm = {
+        id: inputs.id || uuidv4(),
+        usuario_id: inputs.usuario_id || inputs.usuarioId,
+        modulo_id: inputs.modulo_id || inputs.moduloId,
+        puede_ver: inputs.puede_ver ? 1 : 0,
+        puede_crear: inputs.puede_crear ? 1 : 0,
+        puede_editar: inputs.puede_editar ? 1 : 0,
+        puede_eliminar: inputs.puede_eliminar ? 1 : 0
+      };
+      tables.permisos_usuario.push(newPerm);
+      return { recordset: [{ id: newPerm.id }], rowsAffected: [1] };
     }
 
     // 4. SELECT clientes

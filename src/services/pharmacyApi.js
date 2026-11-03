@@ -204,6 +204,29 @@ export const dashboardApi = {
   }
 };
 
+export const usersApi = {
+  listUsers: async () => {
+    const response = await api.get('/users');
+    return response.data;
+  },
+  getUser: async (id) => {
+    const response = await api.get(`/users/${id}`);
+    return response.data;
+  },
+  createUser: async (userData) => {
+    const response = await api.post('/users', userData);
+    return response.data;
+  },
+  updateUser: async (id, userData) => {
+    const response = await api.put(`/users/${id}`, userData);
+    return response.data;
+  },
+  toggleUserStatus: async (id) => {
+    const response = await api.patch(`/users/${id}/status`);
+    return response.data;
+  }
+};
+
 export const healthApi = {
   check: async () => {
     const response = await api.get('/health');
@@ -222,5 +245,6 @@ export default {
   alerts: alertsApi,
   customers: customersApi,
   dashboard: dashboardApi,
+  users: usersApi,
   health: healthApi
 };

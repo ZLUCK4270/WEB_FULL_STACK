@@ -269,3 +269,75 @@ test('QA-TEST-06: Capa de Animaciones Nativas cumple GPU-only, prefers-reduced-m
   assert.equal(posCode.includes('data-parallax'), false);
   assert.equal(posCode.includes('useCursorGlow'), false);
 });
+
+
+test('QA-TEST-07: Gestión de Usuarios y Roles RBAC: Administrador crea nuevos usuarios, asigna rangos y restringe accesos', async () => {
+  // 1. Acceso sin autenticación rechazado
+  const unauthRes = await requestApp('GET', '/api/users');
+  assert.equal(unauthRes.status, 401);
+
+  // 2. Acceso con rol Cajero rechazado (403)
+  const cajeroLogin = await requestApp('POST', '/api/auth/login', { body: { dni: '71829304', password: 'caja2026' } });
+  const cajeroToken = (await cajeroLogin.json()).token;
+  const cajeroUsersRes = await requestApp('GET', '/api/users', { headers: { authorization: 'Bearer ' + cajeroToken } });
+  assert.equal(cajeroUsersRes.status, 403);
+
+  // 3. Acceso con Administrador autorizado (200)
+  const adminLogin = await requestApp('POST', '/api/auth/login', { body: { dni: '10203040', password: 'regente2026' } });
+  const adminToken = (await adminLogin.json()).token;
+  const adminUsersRes = await requestApp('GET', '/api/users', { headers: { authorization: 'Bearer ' + adminToken } });
+  assert.equal(adminUsersRes.status, 200);
+  const usersList = (await adminUsersRes.json()).users;
+  assert.ok(Array.isArray(usersList));
+  assert.ok(usersList.length >= 3);
+
+  // 4. Administrador crea un nuevo empleado con rol vendedor
+  const createRes = await requestApp('POST', '/api/users', {
+    headers: { authorization: 'Bearer ' + adminToken },
+    body: {
+      dni: '44556677',
+      nombre: 'Lucía',
+      apellido: 'Navarro Silva',
+      correo: 'lucia.navarro@novasalud.pe',
+      telefono: '998811223',
+      cargo: 'Cajera Turno Tarde',
+      role: 'vendedor',
+      password: 'passwordSegura2026'
+    }
+  });
+  assert.equal(createRes.status, 201);
+  const createdBody = await createRes.json();
+  assert.equal(createdBody.success, true);
+  assert.equal(createdBody.user.dni, '44556677');
+  assert.equal(createdBody.user.role, 'vendedor');
+  const newUserId = createdBody.user.id;
+
+  // 5. El nuevo usuario inicia sesión con sus credenciales creadas
+  const newLogin = await requestApp('POST', '/api/auth/login', { body: { dni: '44556677', password: 'passwordSegura2026' } });
+  assert.equal(newLogin.status, 200);
+  const newLoginBody = await newLogin.json();
+  assert.ok(newLoginBody.token);
+  assert.equal(newLoginBody.user.role, 'vendedor');
+  const newUserToken = newLoginBody.token;
+
+  // 6. El nuevo usuario tiene acceso al POS y ventas, pero NO a gestión de usuarios ni compras
+  const salesRes = await requestApp('GET', '/api/sales', { headers: { authorization: 'Bearer ' + newUserToken } });
+  assert.equal(salesRes.status, 200);
+
+  const usersForbiddenRes = await requestApp('GET', '/api/users', { headers: { authorization: 'Bearer ' + newUserToken } });
+  assert.equal(usersForbiddenRes.status, 403);
+
+  const purchasesForbiddenRes = await requestApp('GET', '/api/purchases', { headers: { authorization: 'Bearer ' + newUserToken } });
+  assert.equal(purchasesForbiddenRes.status, 403);
+
+  // 7. Administrador desactiva al usuario
+  const toggleRes = await requestApp('PATCH', '/api/users/' + newUserId + '/status', {
+    headers: { authorization: 'Bearer ' + adminToken }
+  });
+  assert.equal(toggleRes.status, 200);
+  assert.equal((await toggleRes.json()).esta_activo, false);
+
+  // 8. Usuario desactivado ya no puede iniciar sesión
+  const disabledLogin = await requestApp('POST', '/api/auth/login', { body: { dni: '44556677', password: 'passwordSegura2026' } });
+  assert.equal(disabledLogin.status, 403);
+});
